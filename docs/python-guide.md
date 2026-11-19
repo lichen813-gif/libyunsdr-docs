@@ -138,7 +138,9 @@ py -3.11 -m venv .venv-sdk
 
 本节适用于交付包 `libyunsdr-26-01-00.1.zip`。实测环境为 Windows x64、MinGW-w64（TDM-GCC 9.2.0）、CMake 4.2.1、SWIG 4.2.1 和 CPython 3.11.9 x64。MinGW 路线无需安装 Visual Studio。解压源码到无空格的路径，打开普通 Windows PowerShell，进入含 `CMakeLists.txt` 的源码根目录。[MinGW-w64、CMake 和 gendef 安装步骤](c-api.md#234-使用-mingw-w64-构建-c-库) · [CPython 3.11.9](https://www.python.org/downloads/release/python-3119/) · [SWIG Windows 预编译包](https://sourceforge.net/projects/swig/files/swigwin/swigwin-4.2.1/swigwin-4.2.1.zip/download)
 
-把第一行 `Set-Location` 引号里的路径改为实际的源码根目录。在新的 PowerShell 中运行以下命令检查工具。`gcc -dumpmachine` 应输出 `x86_64-w64-mingw32`，SWIG 应来自完整解压的 `swigwin-4.2.1` 目录。只有找不到工具时，才把实际所在目录加入 `Path`。缺少 `gendef.exe` 时，按 C 手册安装。[安装 gendef](c-api.md#安装-gendef)
+缺少 `gendef.exe` 时，从本仓库下载 Windows x64 版，放到已加入 `Path` 的 MinGW `bin` 目录。[下载 gendef.exe](https://github.com/lichen813-gif/libyunsdr-docs/releases/download/gendef-win64-14.0.0-r598/gendef.exe)
+
+把第一行 `Set-Location` 引号里的路径改为实际的源码根目录。在 PowerShell 中运行以下命令检查工具。`gcc -dumpmachine` 应输出 `x86_64-w64-mingw32`，SWIG 应来自完整解压的 `swigwin-4.2.1` 目录。
 
 ```powershell
 Set-Location -LiteralPath 'C:\YunSDR\libyunsdr-26-01-00.1'

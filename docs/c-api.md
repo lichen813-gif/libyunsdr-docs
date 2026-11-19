@@ -117,52 +117,17 @@ cmake --install build-win64-usb --config Release
 
 此路线无需 Visual Studio。实测环境为 Windows x64、TDM-GCC 9.2.0（`x86_64-w64-mingw32`）、CMake 4.2.1 和 `gendef`。交付包的 PCIEX、USB3、PCIEX + USB3 三种 Release 配置均通过构建、安装和 C 客户端动态链接验证。[兼容矩阵](compatibility.md)
 
-**准备工具。** 安装 MinGW-w64 x64 工具链和 Windows CMake。工具链需包含 `gcc.exe`、`g++.exe` 和 `mingw32-make.exe`。当前交付源码用 MinGW 构建 DLL 时，需要 `gendef.exe` 生成 `libyunsdr_ss.def`。这个工具可以单独解压使用。MSVC 构建和运行预编译包均无需 `gendef`。[TDM-GCC 9.2.0 x64 安装程序](https://github.com/jmeubank/tdm-gcc/releases/download/v9.2.0-tdm64-1/tdm64-gcc-9.2.0.exe) · [CMake 下载](https://cmake.org/download/)
+**准备工具。** 安装 MinGW-w64 x64 工具链和 Windows CMake。工具链需包含 `gcc.exe`、`g++.exe` 和 `mingw32-make.exe`。当前交付源码用 MinGW 构建 DLL 时，需要 `gendef.exe` 生成 `libyunsdr_ss.def`。MSVC 构建和运行预编译包均无需 `gendef`。[TDM-GCC 9.2.0 x64 安装程序](https://github.com/jmeubank/tdm-gcc/releases/download/v9.2.0-tdm64-1/tdm64-gcc-9.2.0.exe) · [CMake 下载](https://cmake.org/download/)
 
-打开新的普通 PowerShell，确认构建工具可以找到。`gcc -dumpmachine` 应输出 `x86_64-w64-mingw32`。本节使用 `MinGW Makefiles` 生成器。[CMake 生成器说明](https://cmake.org/cmake/help/latest/generator/MinGW%20Makefiles.html)
+##### 安装 gendef
+
+从仓库的 GitHub Releases 下载 Windows x64 版 `gendef.exe`，放到已加入 `Path` 的 MinGW `bin` 目录，例如 `C:\TDM-GCC-64\bin`。如果刚修改过 `Path`，先重新打开 PowerShell。[下载 gendef.exe](https://github.com/lichen813-gif/libyunsdr-docs/releases/download/gendef-win64-14.0.0-r598/gendef.exe) · [来源、源码和许可证](https://github.com/lichen813-gif/libyunsdr-docs/releases/tag/gendef-win64-14.0.0-r598)
+
+运行以下命令检查构建工具。`Get-Command` 应显示 MinGW `bin` 下的 `gendef.exe`，`gcc -dumpmachine` 应输出 `x86_64-w64-mingw32`。本节使用 `MinGW Makefiles` 生成器。[CMake 生成器说明](https://cmake.org/cmake/help/latest/generator/MinGW%20Makefiles.html)
 
 ```powershell
 Get-Command gcc.exe, g++.exe, mingw32-make.exe, gendef.exe, cmake.exe
 gcc -dumpmachine
-```
-
-如果工具已加到 Windows 的 `Path`，重新打开 PowerShell 即可。若只有 `gendef.exe` 缺失，按下面任选一种方法准备。其他构建工具找不到时，把相应工具所在的实际目录加入 `Path`。
-
-##### 安装 gendef
-
-**直接下载 Windows x64 版。** 将 `gendef.exe` 保存到已加入 `Path` 的 MinGW `bin` 目录，例如 `C:\TDM-GCC-64\bin`。在 PowerShell 运行 `Get-Command gendef.exe` 确认位置后即可继续构建。[下载 gendef.exe](https://github.com/lichen813-gif/libyunsdr-docs/releases/download/gendef-win64-14.0.0-r598/gendef.exe) · [来源、源码和许可证](https://github.com/lichen813-gif/libyunsdr-docs/releases/tag/gendef-win64-14.0.0-r598)
-
-**已安装 MSYS2。** 打开开始菜单中的 **MSYS2 UCRT64**，运行以下命令。[MSYS2 gendef 工具包](https://packages.msys2.org/packages/mingw-w64-ucrt-x86_64-tools?repo=ucrt64)
-
-```bash
-pacman -S --needed mingw-w64-ucrt-x86_64-tools
-```
-
-回到普通 PowerShell。若这里找不到 `gendef.exe`，把下行的 `C:\msys64` 改成 MSYS2 的实际安装位置。追加目录可以保留当前编译器的搜索顺序。
-
-```powershell
-$env:Path = "$env:Path;C:\msys64\ucrt64\bin"
-Get-Command gendef.exe
-```
-
-**从 MSYS2 二进制包提取。** 在 MSYS2 官方工具包页面点击 **File** 下载 `.pkg.tar.zst` 文件。把 `$pkg` 改成下载文件的完整路径，把 `$mingwBin` 改成已加入 `Path` 的 MinGW `bin` 目录。下面的命令会把 `gendef.exe` 直接解到该目录。[MSYS2 gendef 二进制包](https://packages.msys2.org/packages/mingw-w64-ucrt-x86_64-tools?repo=ucrt64)
-
-```powershell
-$pkg = 'C:\Downloads\mingw-w64-ucrt-x86_64-tools-14.0.0.r598.ge3d18511f-1-any.pkg.tar.zst'
-$mingwBin = 'C:\TDM-GCC-64\bin'
-& "$env:SystemRoot\System32\tar.exe" -xf $pkg -C $mingwBin --strip-components=2 ucrt64/bin/gendef.exe
-Get-Command gendef.exe
-```
-
-`Get-Command` 应显示 MinGW `bin` 下的 `gendef.exe`。该目录已经在 `Path` 时，可以直接继续构建。如果 MinGW `bin` 不可写，也可解到其他可写目录，再将该目录加入 `Path`。
-
-**遇到 `unable to run program "zstd -d -qq"`。** 当前 `tar.exe` 需要外部程序来解压 `.zst`。若上面直接调用 Windows 自带的 `tar.exe` 仍报同样的错，下载 Zstandard 的 Windows x64 ZIP 并解压。在同一 PowerShell 保留 `$pkg` 和 `$mingwBin`，将第二行引号里的路径改为解压出的 `zstd.exe` 的实际路径。先生成普通 `.tar`，再由系统 `tar` 取出 `gendef.exe`。无需安装 MSYS2 或修改 `Path`。[下载 Zstandard Windows x64](https://github.com/meta/zstd/releases/download/v1.5.7/zstd-v1.5.7-win64.zip)
-
-```powershell
-$tarFile = "$env:TEMP\mingw-tools.pkg.tar"
-& 'C:\Tools\zstd-v1.5.7-win64\zstd.exe' -d -f -o $tarFile $pkg
-& "$env:SystemRoot\System32\tar.exe" -xf $tarFile -C $mingwBin --strip-components=2 ucrt64/bin/gendef.exe
-Get-Command gendef.exe
 ```
 
 ##### 构建并验证 C 库
