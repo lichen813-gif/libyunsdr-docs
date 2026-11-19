@@ -2,7 +2,7 @@
 
 适用交付包为 `libyunsdr-26-01-00.1.zip`，SDK 源码声明版本为 **`26.00.00.1`**。通过 `yunsdr_api_ss.h` 调用主机端库 `yunsdr_ss`，完成设备打开、射频配置、I/Q 收发和时间戳处理。连接方式、通道和参数范围按所用机型及固件确认。
 
-[下载与构建](#2-下载构建与安装) · [首帧接收](#3-首帧接收) · [测试程序与参数](#4-使用随包例程) · [FM 与视频实验](#44-fm-音频接收与视频传输实验) · [函数参考](#5-函数参考) · [程序架构](#6-程序架构) · [数据格式与数据流](#7-iq-格式与数据流) · [同步与排查](#8-时间戳同步与排查)
+[下载与构建](#2-下载构建与安装) · [Windows MinGW-w64](#234-使用-mingw-w64-构建-c-库) · [首帧接收](#3-首帧接收) · [测试程序与参数](#4-使用随包例程) · [FM 与视频实验](#44-fm-音频接收与视频传输实验) · [函数参考](#5-函数参考) · [程序架构](#6-程序架构) · [数据格式与数据流](#7-iq-格式与数据流) · [同步与排查](#8-时间戳同步与排查)
 
 ## 1. 交付版本核对
 
@@ -33,7 +33,7 @@ Windows ARM64、32 位主机和 macOS 的构建组合待确认。
 | 连接串示例 | CMake 选项 | 适用条件 |
 | --- | --- | --- |
 | `pciex:0` | `ENABLE_PCIEX=ON` | 使用配套 XDMA 驱动，`0` 是枚举的第一个设备 |
-| `pcies:0.0` | `ENABLE_PCIES=ON`，保留 `ENABLE_PCIEX=ON` | XDMA Bypass。需要包内 `libpcies` 及支持相应模式的驱动和固件。Windows x64 已验证两个选项同时开启可链接 |
+| `pcies:0.0` | `ENABLE_PCIES=ON`，保留 `ENABLE_PCIEX=ON` | XDMA Bypass。需要包内 `libpcies` 及支持相应模式的驱动和固件。Windows x64 的 MSVC 构建已验证两个选项同时开启可链接 |
 | `usb3:0` | `ENABLE_USB3=ON` | USB3 后端。安装 libusb 开发文件及配套设备驱动或访问规则，`0` 为设备索引 |
 
 `pciex:` 和 `pcies:` 的选择取决于设备固件和配套驱动。使用 `pcies:` 时检查 CMake 日志中的 `Found LIBPCIES` 和库的实际路径。USB3 主机需要正确识别设备，并允许当前用户访问。应用每次传入一个完整设备地址。支持两个句柄的例程可以使用带引号的分号分隔地址。
@@ -47,6 +47,8 @@ Windows ARM64、32 位主机和 macOS 的构建组合待确认。
 | `ENABLE_FIRMWARE` | ON | 启用配套固件支持。仅构建 USB3 时关闭此项，见 2.3.3 |
 
 ### 2.3 Windows x64
+
+需要 PCIES 或固件更新时，使用第 2.3.1 至 2.3.3 节的 MSVC 路线。只需 PCIEX、USB3 或这两种后端时，也可从 [MinGW-w64 构建](#234-使用-mingw-w64-构建-c-库) 开始。联机驱动按第 2.3.1 节第 3、4 步准备。
 
 #### 2.3.1 准备编译工具和驱动
 
@@ -116,6 +118,81 @@ $env:PATH = "$usbPrefix\bin;$usbPrefix\lib;$env:PATH"
 将 `$usb` 替换为实际解压目录。配置阶段核对 `LIBUSB_HEADER_FILE`、`usb_LIBRARY` 和 libusb 版本提示。只构建 USB3 时，在独立构建目录同时设 `-DENABLE_PCIEX=OFF -DENABLE_PCIES=OFF -DENABLE_FIRMWARE=OFF`。本包的固件更新入口依赖 PCIES 提供的链接符号，关闭 PCIES 而保留固件更新会导致链接失败。联机使用 `usb3:0` 和设备允许的采样率、频率及块长。本包 USB3 的普通收发通过多路 API，即使只选一个通道。
 
 使用 CMake GUI 时，先新建 `build-win64-usb`，设置独立的 `CMAKE_INSTALL_PREFIX` 并勾选 `ENABLE_USB3`。在 **Advanced** 中把 `LIBUSB_HEADER_FILE` 指向 `include\libusb.h`，把 `usb_LIBRARY` 指向 `VS2019\MS64\dll\libusb-1.0.lib`。若字段尚未显示，用 **Add Entry** 以 `FILEPATH` 类型添加。再次 **Configure** 后确认已识别 libusb 版本，然后 **Generate**，按 2.3.2 构建和安装。
+
+#### 2.3.4 使用 MinGW-w64 构建 C 库
+
+此路线无需 Visual Studio。实测环境为 Windows x64、TDM-GCC 9.2.0（`x86_64-w64-mingw32`）、CMake 4.2.1 和 `gendef`。交付包的 PCIEX、USB3、PCIEX + USB3 三种 Release 配置均通过构建、安装和 C 客户端动态链接验证。[兼容矩阵](compatibility.md)
+
+**准备工具。** 安装 MinGW-w64 x64 工具链和 Windows CMake。工具链需包含 `gcc.exe`、`g++.exe` 和 `mingw32-make.exe`。若工具链未提供 `gendef.exe`，可下载 MSYS2 的 `mingw-w64-ucrt-x86_64-tools` 二进制包，用 Windows `tar -xf <下载的包路径> -C <解压目录> ucrt64/bin/gendef.exe` 解出该工具。SDK 的构建规则在 DLL 链接后用它生成导出定义文件。[TDM-GCC 9.2.0 x64 安装程序](https://github.com/jmeubank/tdm-gcc/releases/download/v9.2.0-tdm64-1/tdm64-gcc-9.2.0.exe) · [MSYS2 gendef 工具包](https://packages.msys2.org/packages/mingw-w64-ucrt-x86_64-tools?repo=ucrt64) · [CMake 下载](https://cmake.org/download/)
+
+打开普通 Windows PowerShell，将下列工具路径改成实际位置。已在 `Path` 中的目录可以省去。`gcc -dumpmachine` 应输出 `x86_64-w64-mingw32`。本节的 `MinGW Makefiles` 生成器用 Windows 的 `cmd.exe` 执行构建规则，请在 PowerShell 中运行以下命令。[CMake 生成器说明](https://cmake.org/cmake/help/latest/generator/MinGW%20Makefiles.html)
+
+```powershell
+$env:Path = "C:\TDM-GCC-64\bin;C:\YunSDR\tools\ucrt64\bin;$env:Path"
+Get-Command gcc.exe, g++.exe, mingw32-make.exe, gendef.exe, cmake.exe
+gcc -dumpmachine
+gcc --version
+cmake --version
+```
+
+**配置、编译和安装。** 将交付 ZIP 解压到无空格的路径，在包含 `CMakeLists.txt` 的源码根目录运行。将 `$profile` 设为 `pciex`、`usb3` 或 `pciex-usb3`。启用 USB3 时，下载并解压 `libusb-1.0.29.7z`，将 `$usb` 改成实际目录。实测直接链接的是 `VS2019\MS64\dll\libusb-1.0.dll`，并由安装步骤把该 DLL 复制到 SDK 的 `lib\` 目录。此步骤只用该目录中的预编译 DLL。[libusb Windows 二进制包](https://github.com/libusb/libusb/releases/download/v1.0.29/libusb-1.0.29.7z)
+
+```powershell
+$ErrorActionPreference = 'Stop'
+$profile = 'pciex' # pciex, usb3, or pciex-usb3
+if ($profile -notin @('pciex', 'usb3', 'pciex-usb3')) { throw 'Invalid backend profile.' }
+$pciex = if ($profile -eq 'usb3') { 'OFF' } else { 'ON' }
+$usbArgs = @('-DENABLE_USB3=OFF')
+if ($profile -ne 'pciex') {
+    $usb = 'C:\YunSDR\deps\libusb-1.0.29'
+    $usbHeader = (Resolve-Path -LiteralPath "$usb\include\libusb.h").Path
+    $usbDll = (Resolve-Path -LiteralPath "$usb\VS2019\MS64\dll\libusb-1.0.dll").Path
+    $usbArgs = @('-DENABLE_USB3=ON', "-DLIBUSB_HEADER_FILE=$usbHeader", "-Dusb_LIBRARY=$usbDll")
+}
+
+$buildDir = "build-win64-mingw-$profile"
+$prefix = Join-Path (Get-Location).Path "sdk-win64-mingw-$profile"
+cmake -S . -B $buildDir -G 'MinGW Makefiles' -DCMAKE_BUILD_TYPE=Release `
+  "-DCMAKE_INSTALL_PREFIX=$prefix" "-DENABLE_PCIEX=$pciex" -DENABLE_PCIES=OFF `
+  -DENABLE_FIRMWARE=OFF -DENABLE_PCIE=OFF -DENABLE_SFP=OFF `
+  -DENABLE_EXAMPLE=OFF -DENABLE_COMLABS=OFF -DENABLE_PYTHON=OFF @usbArgs
+if ($LASTEXITCODE -ne 0) { throw 'CMake configuration failed.' }
+cmake --build $buildDir --parallel 4
+if ($LASTEXITCODE -ne 0) { throw 'Release build failed.' }
+cmake --install $buildDir
+if ($LASTEXITCODE -ne 0) { throw 'Installation failed.' }
+Get-ChildItem -LiteralPath "$prefix\include", "$prefix\lib"
+```
+
+安装目录的 `include\` 下有公共头文件。`lib\` 下的 `libyunsdr_ss.dll.a` 是 GNU 导入库，`libyunsdr_ss.a` 是静态库，`libyunsdr_ss.def` 是导出定义文件。运行时使用同一次构建的 `libyunsdr_ss.dll`，USB3 版还需同目录的 `libusb-1.0.dll`。
+
+**验证 DLL 加载和 C API 调用。** 在同一 PowerShell 运行以下命令。程序读取时间换算结果，无需连接板卡。成功时输出 `ticks = 15360`。
+
+```powershell
+$source = Join-Path $buildDir 'verify_c_api.c'
+$exe = Join-Path $buildDir 'verify_c_api.exe'
+@'
+#include <stdio.h>
+#include "yunsdr_api_ss.h"
+
+int main(void)
+{
+    if (yunsdr_timeNsToTicks(500000, 30720000.0) != 15360) {
+        return 1;
+    }
+    puts("ticks = 15360");
+    return 0;
+}
+'@ | Set-Content -LiteralPath $source -Encoding ASCII
+
+gcc $source "-I$prefix\include" "$prefix\lib\libyunsdr_ss.dll.a" -o $exe
+if ($LASTEXITCODE -ne 0) { throw 'C test program link failed.' }
+$env:Path = "$prefix\lib;$env:Path"
+& ".\$exe"
+if ($LASTEXITCODE -ne 0) { throw 'C API test failed.' }
+```
+
+**PCIES 和固件更新。** 本交付包在 MinGW 下会自动选中 Linux 的 `libpcies.a` 和 `libfirmware.a`。显式指定随包的 Windows `.lib` 后，链接仍缺少 `__security_check_cookie` 等 MSVC 运行库符号。使用这些功能时按第 2.3.2 或 2.3.3 节用 MSVC 构建。MinGW 的 Python `.pyd` 构建和板卡联机收发尚待验证。
 
 ### 2.4 Linux x86-64 与 AArch64
 

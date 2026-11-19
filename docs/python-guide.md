@@ -21,6 +21,8 @@
 
 从源码构建可选独立的 Visual Studio 2022 Build Tools，省去完整的 Visual Studio IDE。已有匹配的预编译包时，可直接按第 2.1.3 节运行。SDK 已在 VS2019 / MSVC `v142` 上验证构建和导入，独立 VS2022 Build Tools 的验证状态见 [兼容矩阵](compatibility.md)。
 
+若项目只调用 C API，可使用 Windows x64 的 MinGW-w64 路线，已验证 PCIEX、USB3 及两种后端同时开启的构建。MinGW 下生成和导入 Python `_yunsdr_ss_api.pyd` 仍待验证。[MinGW-w64 构建 C 库](c-api.md#234-使用-mingw-w64-构建-c-库)
+
 #### 2.1.1 安装 Visual Studio 2022 Build Tools
 
 1. 从 Microsoft 下载并运行 **Visual Studio 2022 Build Tools** 安装程序。在 **工作负载** 选择 **使用 C++ 的桌面开发**（Desktop development with C++）。工作负载会自动安装 MSBuild 和 C++ 核心组件。[VS2022 Build Tools 下载](https://aka.ms/vs/17/release/vs_BuildTools.exe)
