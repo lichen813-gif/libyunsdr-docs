@@ -25,15 +25,18 @@
 
 1. 从 Microsoft 下载并运行 **Visual Studio 2022 Build Tools** 安装程序。在 **工作负载** 选择 **使用 C++ 的桌面开发**（Desktop development with C++）。工作负载会自动安装 MSBuild 和 C++ 核心组件。[VS2022 Build Tools 下载](https://aka.ms/vs/17/release/vs_BuildTools.exe)
 2. 在右侧 **安装详细信息** 或 **单个组件** 中，保留或勾选 **MSVC v143 - VS 2022 C++ x64/x86 生成工具**，以及一套 **Windows 10 SDK** 或 **Windows 11 SDK**。使用安装程序提供的 CMake 时，再勾选 **适用于 Windows 的 C++ CMake 工具**。已有独立 CMake 3.21 或更新版本时，可省去 CMake 组件。若要复用 VS2019 基线的编译器，再勾选 **MSVC v142 - VS 2019 C++ x64/x86 生成工具（v14.29）**。本工程可省去 AddressSanitizer、测试工具、MFC、ATL、Clang 和 ARM/ARM64 工具。[Build Tools 组件清单](https://learn.microsoft.com/en-us/visualstudio/install/workload-component-id-vs-build-tools?view=vs-2022) · [CMake 生成器说明](https://cmake.org/cmake/help/latest/generator/Visual%20Studio%2017%202022.html)
-3. 安装 **Windows installer (64-bit)** 版 CPython 3.11.9，保留 Python Launcher。将 SWIG 4.2.1 Windows 包解压到本地，把 `swig.exe` 所在目录加到用户 `Path`。使用独立 CMake 时，也把 `cmake.exe` 所在目录加到 `Path`。[CPython 3.11.9](https://www.python.org/downloads/release/python-3119/) · [SWIG 4.2.1](https://github.com/swig/swig/releases/tag/v4.2.1) · [CMake 下载](https://cmake.org/download/)
+3. 安装 **Windows installer (64-bit)** 版 CPython 3.11.9，保留 Python Launcher。下载带有 `swig.exe` 的 Windows 预编译包 `swigwin-4.2.1.zip`，解压整个包，例如解压后得到 `C:\YunSDR\tools\swigwin-4.2.1\swig.exe`。将该目录加到用户 `Path`，并保留同目录下的 `Lib`。使用独立 CMake 时，也把 `cmake.exe` 所在目录加到 `Path`。[CPython 3.11.9](https://www.python.org/downloads/release/python-3119/) · [下载 swigwin-4.2.1.zip](https://sourceforge.net/projects/swig/files/swigwin/swigwin-4.2.1/swigwin-4.2.1.zip/download) · [CMake 下载](https://cmake.org/download/)
 4. 从开始菜单打开 **Developer PowerShell for VS 2022**，检查工具版本。`cl` 此处用于显示编译器版本，构建目标架构由下一节的 `-A x64` 指定。
 
    ```powershell
    cmake --version
+   (Get-Command swig.exe).Source
    swig -version
    py -3.11 --version
    cl
    ```
+
+   SWIG 路径应指向刚解压的 `swigwin-4.2.1` 目录，版本输出应为 `SWIG Version 4.2.1`。
 
 #### 2.1.2 编译安装并验证导入
 
