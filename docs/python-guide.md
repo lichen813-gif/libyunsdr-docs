@@ -137,7 +137,7 @@ py -3.11 -m venv .venv-sdk
 
 本节适用于交付包 `libyunsdr-26-01-00.1.zip`。实测环境为 Windows x64、MinGW-w64（TDM-GCC 9.2.0）、CMake 4.2.1、SWIG 4.2.1 和 CPython 3.11.9 x64。MinGW 路线无需安装 Visual Studio。解压源码到无空格的路径，打开普通 Windows PowerShell，进入含 `CMakeLists.txt` 的源码根目录。[MinGW-w64、CMake 和 gendef 安装步骤](c-api.md#234-使用-mingw-w64-构建-c-库) · [CPython 3.11.9](https://www.python.org/downloads/release/python-3119/) · [SWIG Windows 预编译包](https://sourceforge.net/projects/swig/files/swigwin/swigwin-4.2.1/swigwin-4.2.1.zip/download)
 
-将示例的工具目录和源码路径换成实际位置。工具已在 `Path` 中时，可省去对应目录。`gcc -dumpmachine` 应输出 `x86_64-w64-mingw32`。SWIG 应来自完整解压的 `swigwin-4.2.1` 目录。
+把第一行 `Set-Location` 引号里的路径改为实际的源码根目录。第二行按实际安装位置修改工具目录，已经在 `Path` 中的目录可省去。`gcc -dumpmachine` 应输出 `x86_64-w64-mingw32`。SWIG 应来自完整解压的 `swigwin-4.2.1` 目录。
 
 ```powershell
 Set-Location -LiteralPath 'C:\YunSDR\libyunsdr-26-01-00.1'
@@ -149,60 +149,62 @@ swig -version
 py -3.11 --version
 ```
 
-**构建与安装 Release。** 在同一窗口选择 `$profile`。`pciex` 构建 PCIEX，`usb3` 构建 USB3，`pciex-usb3` 同时启用两种后端。每种配置使用独立的构建和安装目录。启用 USB3 时，将 `$usb` 指向已解压的 libusb 1.0.29 Windows 二进制包。构建使用 `VS2019\MS64\dll` 中现成的 x64 DLL。[libusb Windows 二进制包](https://github.com/libusb/libusb/releases/download/v1.0.29/libusb-1.0.29.7z)
+**准备 Python 环境。** 在同一窗口运行。源码目录已有 CPython 3.11 x64 的 `.venv-sdk` 时，可跳过第一行。
 
 ```powershell
-$ErrorActionPreference = 'Stop'
-if (-not (Test-Path -LiteralPath .\.venv-sdk\Scripts\python.exe)) {
-    py -3.11 -m venv .venv-sdk
-    if ($LASTEXITCODE -ne 0) { throw 'Could not create .venv-sdk.' }
-}
+py -3.11 -m venv .venv-sdk
 $py = (Resolve-Path -LiteralPath .\.venv-sdk\Scripts\python.exe).Path
-$pythonHome = & $py -c "import sys, sysconfig; assert sys.version_info[:2] == (3, 11) and sysconfig.get_platform() == 'win-amd64'; print(sys.base_prefix)"
-if ($LASTEXITCODE -ne 0) { throw 'Use a virtual environment created with x64 CPython 3.11.' }
-$swig = (Get-Command swig.exe).Source
+$pythonHome = & $py -c "import sys; print(sys.base_prefix)"
+```
 
-$profile = 'pciex' # pciex, usb3, or pciex-usb3
-if ($profile -notin @('pciex', 'usb3', 'pciex-usb3')) { throw 'Invalid backend profile.' }
-$pciex = if ($profile -eq 'usb3') { 'OFF' } else { 'ON' }
-$usbArgs = @('-DENABLE_USB3=OFF')
-if ($profile -ne 'pciex') {
-    $usb = 'C:\YunSDR\deps\libusb-1.0.29'
-    $usbHeader = (Resolve-Path -LiteralPath "$usb\include\libusb.h").Path
-    $usbDll = (Resolve-Path -LiteralPath "$usb\VS2019\MS64\dll\libusb-1.0.dll").Path
-    $usbArgs = @('-DENABLE_USB3=ON', "-DLIBUSB_HEADER_FILE=$usbHeader", "-Dusb_LIBRARY=$usbDll")
-}
+**选择后端。** 仅构建 PCIEX 时执行这一组。
 
-$sourceDir = (Get-Location).Path
-$buildDir = Join-Path $sourceDir "build-win64-mingw-python-$profile"
-$prefix = Join-Path $sourceDir "sdk-win64-mingw-python-$profile"
+```powershell
+$profile = 'pciex'
+$backendArgs = @('-DENABLE_PCIEX=ON', '-DENABLE_USB3=OFF')
+```
+
+要启用 USB3，改用下面这一组。把 `$usb` 单引号里的路径改为 libusb 1.0.29 的实际解压目录。仅用 USB3 时保留前两行的值。要同时启用 PCIEX 和 USB3，把 `$profile` 改为 `'pciex-usb3'`，把 `$pciex` 改为 `'ON'`。[libusb Windows 二进制包](https://github.com/libusb/libusb/releases/download/v1.0.29/libusb-1.0.29.7z)
+
+```powershell
+$profile = 'usb3'
+$pciex = 'OFF'
+$usb = 'C:\YunSDR\deps\libusb-1.0.29'
+$backendArgs = @("-DENABLE_PCIEX=$pciex", '-DENABLE_USB3=ON',
+    "-DLIBUSB_HEADER_FILE=$usb\include\libusb.h",
+    "-Dusb_LIBRARY=$usb\VS2019\MS64\dll\libusb-1.0.dll")
+```
+
+**配置、编译和安装。** 三种配置共用下面的命令，各自使用独立的构建和安装目录。配置成功后再编译，编译成功后再安装。
+
+```powershell
+$buildDir = Join-Path $PWD "build-win64-mingw-python-$profile"
+$prefix = Join-Path $PWD "sdk-win64-mingw-python-$profile"
 $pydDir = Join-Path $buildDir 'swig\python\yunsdr_ss\Release'
 New-Item -ItemType Directory -Force -Path "$prefix\bin" | Out-Null
 cmake -S . -B $buildDir -G 'MinGW Makefiles' -DCMAKE_BUILD_TYPE=Release `
   "-DCMAKE_INSTALL_PREFIX=$prefix" "-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=$pydDir" `
-  "-DPython_EXECUTABLE=$py" "-DPython_ROOT_DIR=$pythonHome" "-DSWIG_EXECUTABLE=$swig" `
+  "-DPython_EXECUTABLE=$py" "-DPython_ROOT_DIR=$pythonHome" `
   -DENABLE_PYTHON=ON -DBUILD_PYTHON=ON -DENABLE_EXAMPLE=OFF -DENABLE_COMLABS=OFF `
-  "-DENABLE_PCIEX=$pciex" -DENABLE_PCIES=OFF -DENABLE_FIRMWARE=OFF `
-  -DENABLE_PCIE=OFF -DENABLE_SFP=OFF @usbArgs
-if ($LASTEXITCODE -ne 0) { throw 'CMake configuration failed.' }
+  -DENABLE_PCIES=OFF -DENABLE_FIRMWARE=OFF -DENABLE_PCIE=OFF -DENABLE_SFP=OFF @backendArgs
 cmake --build $buildDir --parallel 4
-if ($LASTEXITCODE -ne 0) { throw 'Release build failed.' }
 cmake --install $buildDir
-if ($LASTEXITCODE -ne 0) { throw 'Release installation failed.' }
-if ($profile -ne 'pciex') {
-    Copy-Item -LiteralPath "$prefix\lib\libusb-1.0.dll" -Destination "$prefix\bin"
-}
+```
+
+启用 USB3 时，安装成功后再执行这一行，将 libusb 的 DLL 放到 Python 绑定旁。
+
+```powershell
+Copy-Item -LiteralPath "$prefix\lib\libusb-1.0.dll" -Destination "$prefix\bin"
 ```
 
 交付包的构建后复制规则会在 `<构建目录>\swig\python\yunsdr_ss\Release` 查找 `_yunsdr_ss_api.pyd`。`MinGW Makefiles` 默认不会给模块输出加上 `Release` 子目录，链接成功后可能在复制时报错。上面的 `CMAKE_LIBRARY_OUTPUT_DIRECTORY` 在配置时把模块写到复制规则期望的绝对路径，随后由该规则复制到安装目录的 `bin`。这项设置无需修改 SDK 源码。[CMake 库输出目录](https://cmake.org/cmake/help/latest/variable/CMAKE_LIBRARY_OUTPUT_DIRECTORY.html)
 
-**导入检查。** 在同一窗口运行以下命令。两个模块的加载路径都应位于本次安装目录的 `bin`，最后一行应为 `ticks = 15360`。USB3 版的 `libusb-1.0.dll` 与 `_yunsdr_ss_api.pyd` 放在同一目录。离线检查无需连接板卡。
+**导入检查。** 在同一窗口临时进入安装目录的 `bin`，无需设置 `PYTHONPATH`。输出应显示两个模块在该目录中的路径和 `ticks = 15360`。离线检查无需连接板卡。
 
 ```powershell
-Get-Item -LiteralPath "$pydDir\_yunsdr_ss_api.pyd", "$prefix\bin\yunsdr_ss_api.py", "$prefix\bin\_yunsdr_ss_api.pyd", "$prefix\bin\libyunsdr_ss.dll"
-$env:PYTHONPATH = "$prefix\bin"
-& $py -P -c "import yunsdr_ss_api as api, _yunsdr_ss_api as ext; print(api.__file__); print(ext.__file__); ticks = api.yunsdr_timeNsToTicks(500000, 30720000.0); assert ticks == 15360, ticks; print('ticks =', ticks)"
-if ($LASTEXITCODE -ne 0) { throw 'Python import or tick conversion failed.' }
+Push-Location -LiteralPath "$prefix\bin"
+& $py -E -c "import yunsdr_ss_api as api, _yunsdr_ss_api as ext; print(api.__file__, ext.__file__, sep='\n'); print('ticks =', api.yunsdr_timeNsToTicks(500000, 30720000.0))"
+Pop-Location
 ```
 
 | 后端配置 | Windows x64 MinGW + SWIG 验证情况 |
