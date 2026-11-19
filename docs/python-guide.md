@@ -2,7 +2,7 @@
 
 本指南以 `libyunsdr-26-01-00.1.zip` 为基线，包内 SDK 版本为 **`26.00.00.1`**。使用 SWIG 绑定 `yunsdr_ss_api` 配置设备和传输 IQ16 数据。安装设备驱动、核对固件及选择 `pciex:`、`pcies:` 或 `usb3:` 时，参照 [C API 手册的驱动与构建章节](c-api.md#2-下载构建与安装)。
 
-[Windows x64](#21-windows-x64) · [Linux 与 Spyder](#22-linux-x86-64-与-aarch64) · [Windows 虚拟环境与 Spyder](#23-windows-虚拟环境与-spyder) · [首帧接收](#4-接收首帧-iq) · [射频配置](#5-配置射频与时间戳) · [循环发射](#6-生成波形与循环发射) · [测试截图](#73-测试截图) · [排查问题](#8-常见问题)
+[Windows x64](#21-windows-x64) · [Linux 与 Spyder](#22-linux-x86-64-与-aarch64) · [Windows 虚拟环境与 Spyder](#23-windows-虚拟环境与-spyder) · [Windows 命令行例程](#233-在-powershell-运行-python-例程) · [首帧接收](#4-接收首帧-iq) · [射频配置](#5-配置射频与时间戳) · [循环发射](#6-生成波形与循环发射) · [测试截图](#73-测试截图) · [排查问题](#8-常见问题)
 
 ## 1. 获取 SDK 和例程
 
@@ -301,6 +301,34 @@ print(api.yunsdr_timeNsToTicks(500000, 30720000.0))
 
 若已单独安装 Spyder，或控制台用了其他解释器，在「首选项 → Python 解释器」中选择上面检查过的 `.venv-sdk\Scripts\python.exe`，然后重启内核。按控制台提示的版本范围在该虚拟环境补装 `spyder-kernels`。可打开配套 `test_cofdm.py` 做离线调试，将工作目录设为脚本和输入文件所在目录。需要独立图窗时，在 IPython 控制台的绘图首选项中选择可用的 Qt 后端。[Spyder 解释器配置](https://docs.spyder-ide.org/current/faq.html) · [参考例程与截图](#73-测试截图)
 
+#### 2.3.3 在 PowerShell 运行 Python 例程
+
+用普通 Windows PowerShell 可以直接执行 `test_cofdm.py`，无需启动 Spyder。先按第 2.3.1 节创建 `.venv-sdk`。下面以预编译包工作目录中的虚拟环境为例。如果 `.venv-sdk` 建在 SDK 源码目录，把第一行换成该环境中 `python.exe` 的实际路径。第二行指定例程目录，目录中应保留配套的 `test_cofdm.py`、`cofdm_tx.py` 和 `cofdm_rx.py`。已进入例程目录时可跳过第二行。
+
+```powershell
+$py = (Resolve-Path -LiteralPath "$env:USERPROFILE\YunSDR\.venv-sdk\Scripts\python.exe").Path
+Set-Location -LiteralPath 'D:\host_c\python_20260213'
+& $py -c "import sys; print(sys.executable)"
+& $py -m pip install numpy matplotlib ModulationPy
+if ($LASTEXITCODE -ne 0) { throw 'Could not install the OFDM example dependencies.' }
+```
+
+`D:\host_c\python_20260213` 是示例路径，运行前按实际解压位置修改。在 PowerShell 逐行执行时，行末直接按 Enter。如果已经把 SDK 库复制到了当前例程目录，在同一个窗口先设置下面的 `PYTHONPATH`，再检查导入。USB3 构建还需把 `libusb-1.0.dll` 放在同一目录。若库位于其他目录，把第一行右侧换成该目录的绝对路径。
+
+```powershell
+$env:PYTHONPATH = (Get-Location).Path
+Get-Item -LiteralPath "$env:PYTHONPATH\yunsdr_ss_api.py", "$env:PYTHONPATH\_yunsdr_ss_api.pyd", "$env:PYTHONPATH\libyunsdr_ss.dll"
+& $py -P -c "import yunsdr_ss_api as api, _yunsdr_ss_api as ext; print(api.__file__); print(ext.__file__)"
+```
+
+两个模块的路径应指向 `PYTHONPATH` 指定的目录。`test_cofdm.py` 是离线仿真，无需调用 SDK 或连接板卡。只做离线 OFDM 测试时可跳过上面的 SDK 导入检查。确认当前目录是例程目录，然后执行以下命令。
+
+```powershell
+& $py .\test_cofdm.py
+```
+
+配套例程会在当前目录写入或覆盖 `rf_data.bin`，并用 Matplotlib 显示结果。关闭图窗后，终端会打印 EVM 和频偏等结果。在同一窗口已设置好 `$py` 和 `PYTHONPATH` 时，后续可直接运行最后这条命令。运行其他脚本时，替换命令中的文件名即可。[OFDM 结果示例](#73-测试截图)
+
 ## 3. Python 调用约定
 
 | 调用 | 行为 |
@@ -502,7 +530,7 @@ print(offset_hz, amplitude_dbfs, phase_deg)
 
 另配包的主要入口是 `yunsdr_tx_rxcyclic.py`（循环收发）、`yunsdr_tx.py`（独立发送）、`test_cofdm.py`（离线 OFDM）、`coeff_calc.py` / `config_coeff.py`（生成和应用相位补偿）、`disable_coeff.py`（关闭或清除补偿）及 `calib_from_gps.py`（设备支持时的参考校准）。先用对应参考包的模块和脚本组合运行。在需要使用本指南编译的 SWIG 绑定时，确认脚本目录中没有会覆盖导入路径的同名旧 `.py`、`.pyd` 或 `.so`，用 `api.__file__` 验证。
 
-解压例程包并切换到包含 `test_cofdm.py` 的目录，保留第 2 节设定的 Python 环境及绝对路径变量。在 Windows 运行 `& $py .\test_cofdm.py`，在 Linux 运行 `"$py" ./test_cofdm.py`。离线验证通过后，再在顶层脚本中设置设备地址、射频类型、目标频点、采样率、每路块长和通道掩码，按同样方式运行所需的入口脚本。
+解压例程包并切换到包含 `test_cofdm.py` 的目录，保留第 2 节设定的 Python 环境及绝对路径变量。Windows 可按 [PowerShell 运行步骤](#233-在-powershell-运行-python-例程) 执行，Linux 运行 `"$py" ./test_cofdm.py`。离线验证通过后，再在顶层脚本中设置设备地址、射频类型、目标频点、采样率、每路块长和通道掩码，按同样方式运行所需的入口脚本。
 
 使用配套脚本校准接收相位时，在循环收发例程中选择单音并将相位差保存到 `data/`。在 `coeff_calc.py` 设定同一频点，生成相应的补偿文件。随后在 `config_coeff.py` 选择该频点的两份系数文件并运行。重新收取同源单音，验证与参考通道的相位差，再把已验证的参数纳入应用启动流程。
 
