@@ -44,60 +44,63 @@
 
 #### 2.1.2 编译安装并验证导入
 
-将 SDK 解压到不含空格的路径，例如 `C:\YunSDR\libyunsdr-26-01-00.1`，在同一 PowerShell 进入含 `CMakeLists.txt` 的源码根目录。本交付包的 `gen_build_info` 规则会在含空格的源码路径下失败。源码 ZIP 缺少 Git 元数据时，构建日志可能提示 `not a git repository`，以 CMake 和构建命令的退出状态为准。
-
-以下配置构建 PCIEX 和 PCIES 版。需要同时启用 USB3 时，先解压 libusb 1.0.29 的 Windows 二进制包，设置 `$enableUsb3 = $true`，并把 `$usb` 改为解压后的实际路径（其下应有 `include` 和 `VS2022`）。两种配置使用各自的构建和安装目录。[libusb 1.0.29 发布包](https://github.com/libusb/libusb/releases/tag/v1.0.29)
+**准备源码和 Python 环境。** 在 Developer PowerShell 中，把第一行 `Set-Location` 单引号里的路径改成含 `CMakeLists.txt` 的源码根目录。本交付包的 `gen_build_info` 规则要求源码路径不含空格。已有 `.venv-sdk` 时跳过第二行。使用已安装的 CPython 3.11 x64 和 `Path` 上的 SWIG。
 
 ```powershell
-$ErrorActionPreference = 'Stop'
-py -3.11 -c "import sys, sysconfig; assert sys.version_info[:2] == (3, 11) and sysconfig.get_platform() == 'win-amd64'; print(sys.version)"
-if ($LASTEXITCODE -ne 0) { throw 'Select x64 CPython 3.11 before building.' }
+Set-Location -LiteralPath 'C:\YunSDR\libyunsdr-26-01-00.1'
 py -3.11 -m venv .venv-sdk
-if ($LASTEXITCODE -ne 0) { throw 'Could not create .venv-sdk.' }
 $py = (Resolve-Path .\.venv-sdk\Scripts\python.exe).Path
-& $py -m pip install numpy
-if ($LASTEXITCODE -ne 0) { throw 'Could not install NumPy.' }
 $pythonHome = & $py -c "import sys; print(sys.base_prefix)"
-$swig = (Get-Command swig.exe).Source
-
 $generator = 'Visual Studio 17 2022'
 $toolset = 'v143'
-$enableUsb3 = $false
+```
+
+**选择构建配置。** 在下面两组命令中选一组。只需 PCIEX 和 PCIES 时执行这一组。
+
+```powershell
 $profile = 'pciex-pcies'
 $usbArgs = @('-DENABLE_USB3=OFF')
-if ($enableUsb3) {
-    $profile = 'pciex-pcies-usb3'
-    $usb = 'C:\YunSDR\deps\libusb-1.0.29'
-    $usbVs = if ($toolset -eq 'v142') { 'VS2019' } else { 'VS2022' }
-    $usbHeader = (Resolve-Path -LiteralPath "$usb\include\libusb.h").Path
-    $usbLib = (Resolve-Path -LiteralPath "$usb\$usbVs\MS64\dll\libusb-1.0.lib").Path
-    $usbArgs = @('-DENABLE_USB3=ON', "-DLIBUSB_HEADER_FILE=$usbHeader", "-Dusb_LIBRARY=$usbLib")
-}
+```
 
+要同时启用 USB3，改用下面这一组。把 `$usb` 单引号里的路径改为 libusb 1.0.29 的实际解压目录。使用 `v142` 时，最后一行路径里的 `VS2022` 改成 `VS2019`。[libusb 1.0.29 Windows 二进制包](https://github.com/libusb/libusb/releases/download/v1.0.29/libusb-1.0.29.7z)
+
+```powershell
+$profile = 'pciex-pcies-usb3'
+$usb = 'C:\YunSDR\deps\libusb-1.0.29'
+$usbArgs = @('-DENABLE_USB3=ON',
+    "-DLIBUSB_HEADER_FILE=$usb\include\libusb.h",
+    "-Dusb_LIBRARY=$usb\VS2022\MS64\dll\libusb-1.0.lib")
+```
+
+**配置、编译和安装。** 两种配置共用以下命令。逐步执行，CMake 配置成功后再编译，编译成功后再安装。配置输出应找到 Python 的 `Interpreter`、`Development` 和 SWIG。源码 ZIP 缺少 Git 元数据时，构建可能提示 `not a git repository`，以命令的退出状态为准。
+
+```powershell
 $buildDir = "build-win64-python-$toolset-$profile"
 $prefix = Join-Path (Get-Location).Path "sdk-win64-python-$toolset-$profile"
 New-Item -ItemType Directory -Force -Path "$prefix\bin" | Out-Null
 cmake -S . -B $buildDir -G $generator -A x64 -T $toolset `
   -DCMAKE_BUILD_TYPE=Release "-DCMAKE_INSTALL_PREFIX=$prefix" `
-  "-DPython_EXECUTABLE=$py" "-DPython_ROOT_DIR=$pythonHome" "-DSWIG_EXECUTABLE=$swig" `
+  "-DPython_EXECUTABLE=$py" "-DPython_ROOT_DIR=$pythonHome" `
   -DENABLE_PYTHON=ON -DBUILD_PYTHON=ON -DENABLE_EXAMPLE=OFF -DENABLE_COMLABS=OFF `
   -DENABLE_PCIEX=ON -DENABLE_PCIES=ON -DENABLE_PCIE=OFF -DENABLE_SFP=OFF @usbArgs
-if ($LASTEXITCODE -ne 0) { throw 'CMake configuration failed.' }
 cmake --build $buildDir --config Release --parallel 4
-if ($LASTEXITCODE -ne 0) { throw 'Release build failed.' }
 cmake --install $buildDir --config Release
-if ($LASTEXITCODE -ne 0) { throw 'Release installation failed.' }
-if ($enableUsb3) {
-    Copy-Item -LiteralPath "$prefix\lib\libusb-1.0.dll" -Destination "$prefix\bin"
-}
-
-Get-ChildItem -LiteralPath "$prefix\bin"
-$env:PYTHONPATH = "$prefix\bin"
-& $py -P -c "import yunsdr_ss_api as api, _yunsdr_ss_api as ext; print(api.__file__); print(ext.__file__); ticks = api.yunsdr_timeNsToTicks(500000, 30720000.0); assert ticks == 15360, ticks; print('ticks =', ticks)"
-if ($LASTEXITCODE -ne 0) { throw 'Python import or tick conversion failed.' }
 ```
 
-配置输出应找到目标 Python 的 `Interpreter`、`Development` 和 SWIG。`bin` 中应有 `yunsdr_ss_api.py`、`_yunsdr_ss_api.pyd`、`libyunsdr_ss.dll`，USB3 构建还应有 `libusb-1.0.dll`。验证输出应来自本次安装的 `bin`，最后一行是 `ticks = 15360`。这项检查无需连接板卡。新开终端后，从源码根目录重新设置 `$py`、`$prefix` 和 `PYTHONPATH`。
+USB3 版安装完成后，再执行这一行，将 libusb 的 DLL 放在 Python 绑定旁。
+
+```powershell
+Copy-Item -LiteralPath "$prefix\lib\libusb-1.0.dll" -Destination "$prefix\bin"
+```
+
+**验证导入。** 在同一终端执行。两个模块的路径应指向本次安装的 `bin`，最后一行应为 `ticks = 15360`。这项检查无需连接板卡。
+
+```powershell
+$env:PYTHONPATH = "$prefix\bin"
+& $py -P -B -c "import yunsdr_ss_api as api, _yunsdr_ss_api as ext; print(api.__file__, ext.__file__, sep='\n'); print('ticks =', api.yunsdr_timeNsToTicks(500000, 30720000.0))"
+```
+
+运行例程所需的 NumPy 等依赖按第 2.3 节安装。安装目录的 `bin` 中有 `yunsdr_ss_api.py`、`_yunsdr_ss_api.pyd` 和 `libyunsdr_ss.dll`，USB3 版还应有 `libusb-1.0.dll`。[PowerShell 运行例程](#233-在-powershell-运行-python-例程)
 
 在 VS2022 Build Tools 中已加装 `v142` 时，将 `$toolset` 改成 `'v142'`，继续使用 `Visual Studio 17 2022` 生成器。使用现有 VS2019 时，在 VS2019 的 Developer PowerShell 进入新的源码解压目录，将 `$generator` 改成 `'Visual Studio 16 2019'`、`$toolset` 改成 `'v142'` 后执行同一组命令。构建目录中的 CMake 缓存绑定到首次使用的生成器和工具集。
 
@@ -106,11 +109,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Python import or tick conversion failed.' }
 在编译机完成第 2.1.2 节后，可以把同一次 Release 安装中的运行文件打成 ZIP，给另一台 Windows x64 电脑使用。若已从交付方取得同版预编译包，可直接解压验证。以下 ZIP 名称包含 SDK 版本、Python 版本、架构和启用的后端。
 
 ```powershell
-$runtimeFiles = @('yunsdr_ss_api.py', '_yunsdr_ss_api.pyd', 'libyunsdr_ss.dll')
-if ($enableUsb3) { $runtimeFiles += 'libusb-1.0.dll' }
-$runtimeFiles = $runtimeFiles | ForEach-Object { Join-Path "$prefix\bin" $_ }
 $zip = "libyunsdr-26.00.00.1-cp311-win64-$profile.zip"
-Compress-Archive -LiteralPath $runtimeFiles -DestinationPath $zip -Force
+Compress-Archive -Path "$prefix\bin\*.py", "$prefix\bin\*.pyd", "$prefix\bin\*.dll" -DestinationPath $zip -Force
 ```
 
 在运行机安装 **CPython 3.11 x64** 和 **Microsoft Visual C++ v14 x64 Redistributable**。运行机只需这些运行依赖和例程所用的 Python 库。连接板卡时再按传输方式安装相应驱动。[CPython 3.11.9](https://www.python.org/downloads/release/python-3119/) · [下载 VC++ x64 运行库](https://aka.ms/vc14/vc_redist.x64.exe) · [设备驱动准备](c-api.md#231-准备编译工具和驱动)
