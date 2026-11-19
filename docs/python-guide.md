@@ -223,7 +223,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Python import or tick conversion failed.' }
 
 ### 2.2 Linux x86-64 与 AArch64
 
-以下以 Debian/Ubuntu 和 Bash 为例。使用 pyenv 安装 CPython 3.11.9，并用这个解释器创建 `venv311`。CMake 构建绑定、pip 安装依赖和 Spyder 调试均使用这个环境。
+以下以 Debian/Ubuntu 和 Bash 为例。用 pyenv 安装 CPython 3.11.9，在例程目录创建 `venv311`。安装依赖和运行例程时，直接调用该目录下的 Python，无需激活虚拟环境。
 
 #### 2.2.1 安装 pyenv 并生成 venv311
 
@@ -236,49 +236,30 @@ if ($LASTEXITCODE -ne 0) { throw 'Python import or tick conversion failed.' }
      libncurses-dev xz-utils tk-dev libffi-dev liblzma-dev
    ```
 
-2. 将 pyenv 安装到用户目录并初始化当前 Bash。已有 pyenv 时使用现有安装目录，可跳过克隆。希望每次打开 Bash 都能直接使用 pyenv 时，将环境变量和初始化命令加入 `~/.bashrc`。[pyenv 安装说明](https://github.com/pyenv/pyenv#installation)
+2. 将 pyenv 安装到用户目录。已有 pyenv 时，跳过克隆并按实际位置设置 `PYENV_ROOT`。这里只用 `pyenv exec` 选择建环境的解释器。[pyenv 安装说明](https://github.com/pyenv/pyenv#installation)
 
    ```bash
    export PYENV_ROOT="$HOME/.pyenv"
-   if [ ! -x "$PYENV_ROOT/bin/pyenv" ]; then
-     git clone https://github.com/pyenv/pyenv.git "$PYENV_ROOT"
-   fi
+   git clone https://github.com/pyenv/pyenv.git "$PYENV_ROOT"
    export PATH="$PYENV_ROOT/bin:$PATH"
-   eval "$(pyenv init - bash)"
-   pyenv --version
    ```
 
-3. 安装 CPython 3.11.9 并用它创建虚拟环境。`PYENV_VERSION=3.11.9` 只选择创建环境这一条命令所用的解释器。默认存放在 `~/python_envs/venv311`。若使用已预置的可写数据目录，可将 `venv_dir` 改为 `/data/python_envs/venv311`。
+3. 把下面第一行 `cd` 引号里的路径改成实际的例程目录，也就是 `test_cofdm.py` 所在目录。执行后，`venv311` 会与脚本同级。已有该环境时可跳过创建命令。若要复用其他目录中的环境，例如 `/data/python_envs/venv311`，在后续命令中用该环境的绝对路径替换 `./venv311`。
 
    ```bash
+   cd "$HOME/python_20260213"
    PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install -s 3.11.9
-   venv_dir="$HOME/python_envs/venv311"
-   mkdir -p "$(dirname "$venv_dir")"
-   PYENV_VERSION=3.11.9 pyenv exec python -m venv "$venv_dir"
-   source "$venv_dir/bin/activate"
-   py="$VIRTUAL_ENV/bin/python"
-   "$py" --version
-   "$py" -c 'import sys; print(sys.executable); print(sys.base_prefix)'
-   ```
-
-   输出应显示 `Python 3.11.9`、`venv311/bin/python` 和 pyenv 安装的 3.11.9 基础目录。若复用已有 `venv311`，先用这两项检查确认其基础版本。
-
-4. 在 `venv311` 中通过 pip 安装 Spyder 和例程依赖。使用该环境的解释器调用 pip，可确认库安装在同一虚拟环境中。Spyder 所需的 Qt 和内核依赖由 pip 一并解析。[Spyder pip 安装说明](https://docs.spyder-ide.org/current/installation.html#using-pip)
-
-   ```bash
-   "$py" -m pip install --upgrade pip
-   "$py" -m pip install spyder numpy matplotlib scipy PyQt5 ModulationPy
-   "$py" -m pip check
-   "$py" -m pip show spyder spyder-kernels
+   PYENV_VERSION=3.11.9 pyenv exec python -m venv venv311
+   ./venv311/bin/python -m pip install numpy matplotlib ModulationPy
    ```
 
 #### 2.2.2 用 venv311 构建并导入绑定
 
-进入含 `CMakeLists.txt` 的 SDK 源码根目录。AArch64 使用匹配主机架构的配套驱动，CMake 会优先查找 `lib/ARM64/` 的静态依赖。下面指定 `venv311` 的解释器以及对应的 pyenv 基础目录，使 CMake 查找同一套开发头文件和库。
+把 `cd` 改为含 `CMakeLists.txt` 的 SDK 源码根目录，把 `py` 改为上一步创建的 `venv311/bin/python` 的绝对路径。AArch64 使用匹配主机架构的配套驱动，CMake 会优先查找 `lib/ARM64/` 的静态依赖。
 
 ```bash
-source "$HOME/python_envs/venv311/bin/activate"
-py="$VIRTUAL_ENV/bin/python"
+cd "$HOME/libyunsdr-26-01-00.1"
+py="$HOME/python_20260213/venv311/bin/python"
 python_home="$("$py" -c 'import sys; print(sys.base_prefix)')"
 build_dir="$PWD/build-linux-python"
 cmake -S . -B "$build_dir" -DCMAKE_BUILD_TYPE=Release \
@@ -293,34 +274,34 @@ ldd "$build_dir/lib/_yunsdr_ss_api.so"
 "$py" -c 'import yunsdr_ss_api as api, _yunsdr_ss_api as ext; print(api.__file__); print(ext.__file__)'
 ```
 
-若虚拟环境建在其他位置，请同步替换 `source` 行。检查 CMake 选中的 Python 为 3.11.9 且找到 `Interpreter` 和 `Development`。本包将生成的 `yunsdr_ss_api.py` 和 `_yunsdr_ss_api.so` 复制到 `build-linux-python/lib/`，与 `libyunsdr_ss.so` 一起使用。`ldd` 应解析到该构建的 C 库及系统依赖。启用 USB3 时安装 `libusb-1.0-0-dev`，把 `ENABLE_USB3` 改为 `ON` 并使用独立构建目录。
+检查 CMake 选中的 Python 为 3.11.9 且找到 `Interpreter` 和 `Development`。本包将生成的 `yunsdr_ss_api.py` 和 `_yunsdr_ss_api.so` 复制到 `build-linux-python/lib/`，与 `libyunsdr_ss.so` 一起使用。`ldd` 应解析到该构建的 C 库及系统依赖。启用 USB3 时安装 `libusb-1.0-0-dev`，把 `ENABLE_USB3` 改为 `ON` 并使用独立构建目录。
 
 #### 2.2.3 从 venv311 启动 Spyder 调试
 
-1. 在 Linux 图形桌面的终端中激活 `venv311`，从 SDK 源码根目录设置本次构建的库路径，然后从虚拟环境启动 Spyder。使用 USB3 构建或自定义目录时，替换 `build_dir`。
+在 Linux 图形桌面的终端进入例程目录。首次使用时执行第一行安装 Spyder。第二行直接用该目录下的 `venv311` 启动 Spyder 并打开例程。[Spyder pip 安装说明](https://docs.spyder-ide.org/current/installation.html#using-pip)
 
-   ```bash
-   source "$HOME/python_envs/venv311/bin/activate"
-   build_dir="$PWD/build-linux-python"
-   export PYTHONPATH="$build_dir/lib"
-   export LD_LIBRARY_PATH="$build_dir/lib"
-   "$VIRTUAL_ENV/bin/spyder"
-   ```
+```bash
+./venv311/bin/python -m pip install spyder
+./venv311/bin/spyder --new-instance --workdir . ./test_cofdm.py
+```
 
-2. 在 Spyder 的 IPython 控制台检查解释器和绑定路径。解释器应位于 `venv311/bin/`，两个模块应来自 `build-linux-python/lib/`。若当前内核使用了其他解释器，可在「首选项 → Python 解释器」选择 `venv311/bin/python`，再重启内核。
+在编辑器按 **F5** 运行。在行号栏设置断点后，从「调试」菜单启动调试。若当前内核选择了其他解释器，在「首选项 → Python 解释器」选择 `venv311/bin/python` 的实际路径，再重启内核。其他例程用到 SciPy 时，在该环境中运行 `./venv311/bin/python -m pip install scipy`。[Spyder 调试说明](https://docs.spyder-ide.org/current/panes/debugging.html)
 
-   ```python
-   import sys
-   import yunsdr_ss_api as api
-   import _yunsdr_ss_api as ext
+调试调用 libyunsdr 的脚本时，先按第 2.2.4 节放置库文件并设置动态库搜索路径，再从同一终端启动 Spyder。联机前安装对应驱动并配置设备访问权限。[驱动安装](c-api.md#241-准备工具解压源码与核对设备)
 
-   print(sys.executable)
-   print(api.__file__)
-   print(ext.__file__)
-   ```
+#### 2.2.4 在 Bash 运行 Python 例程
 
-3. 在 Spyder 中打开例程，将工作目录设为该脚本和输入文件所在目录。先运行配套的 `test_cofdm.py` 做离线检查。可在 IPython 控制台的绘图首选项选择 Qt 后端并重启内核，让 Matplotlib 打开独立图窗。典型图窗见 [测试截图](#73-测试截图)。
-4. 调试时，在行号栏设置断点，从「调试」菜单运行当前文件，在变量浏览器中检查 `shape`、`dtype`、掩码和返回点数。联机调试前按 [驱动安装](c-api.md#241-准备工具解压源码与核对设备) 配置设备权限，在当前用户的图形会话启动 Spyder。[Spyder 调试说明](https://docs.spyder-ide.org/current/panes/debugging.html)
+在 `venv311` 和脚本所在目录直接执行。离线 OFDM 例程无需启动 Spyder，也无需加载 SDK 或连接设备。
+
+```bash
+./venv311/bin/python ./test_cofdm.py
+```
+
+若脚本调用 libyunsdr，将同一次构建的 `yunsdr_ss_api.py`、`_yunsdr_ss_api.so` 和 `libyunsdr_ss.so` 复制到脚本旁。Python 会从脚本目录导入绑定。为了让 Linux 动态加载器也能找到同目录的 C 库，在启动 Python 或 Spyder 前，从例程目录执行这一行。
+
+```bash
+export LD_LIBRARY_PATH="$PWD${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+```
 
 Linux 原生编译、Spyder 图形调试和联机验证状态见 [兼容矩阵](compatibility.md)。AArch64 上安装 Spyder 还需确认发行版及所选 Python 版本有可用的 Qt 依赖。
 
@@ -579,7 +560,7 @@ print(offset_hz, amplitude_dbfs, phase_deg)
 
 另配包的主要入口是 `yunsdr_tx_rxcyclic.py`（循环收发）、`yunsdr_tx.py`（独立发送）、`test_cofdm.py`（离线 OFDM）、`coeff_calc.py` / `config_coeff.py`（生成和应用相位补偿）、`disable_coeff.py`（关闭或清除补偿）及 `calib_from_gps.py`（设备支持时的参考校准）。先用对应参考包的模块和脚本组合运行。在需要使用本指南编译的 SWIG 绑定时，确认脚本目录中没有会覆盖导入路径的同名旧 `.py`、`.pyd` 或 `.so`，用 `api.__file__` 验证。
 
-解压例程包并切换到包含 `test_cofdm.py` 的目录。Windows 可按 [PowerShell 运行步骤](#233-在-powershell-运行-python-例程) 执行。Linux 保留第 2 节设置的环境，运行 `"$py" ./test_cofdm.py`。离线验证通过后，再在顶层脚本中设置设备地址、射频类型、目标频点、采样率、每路块长和通道掩码，按同样方式运行所需的入口脚本。
+解压例程包并切换到包含 `test_cofdm.py` 的目录。离线验证通过后，再在联机脚本中设置设备地址、射频类型、目标频点、采样率、每路块长和通道掩码。[Windows PowerShell 运行步骤](#233-在-powershell-运行-python-例程) · [Linux Bash 运行步骤](#224-在-bash-运行-python-例程)
 
 使用配套脚本校准接收相位时，在循环收发例程中选择单音并将相位差保存到 `data/`。在 `coeff_calc.py` 设定同一频点，生成相应的补偿文件。随后在 `config_coeff.py` 选择该频点的两份系数文件并运行。重新收取同源单音，验证与参考通道的相位差，再把已验证的参数纳入应用启动流程。
 
@@ -621,7 +602,7 @@ print(offset_hz, amplitude_dbfs, phase_deg)
 | --- | --- |
 | `No module named 'yunsdr_ss_api'` | 检查 `PYTHONPATH` 和解释器。包装文件 `yunsdr_ss_api.py` 应与生成的扩展一同存在 |
 | Windows `DLL load failed` 或 Linux `cannot open shared object file` | 检查 Python 版本和位数、生成扩展的路径与同版 `libyunsdr_ss`。USB3 检查 libusb 动态库。Linux 在测试终端用 `ldd` 核对 |
-| Spyder 中的解释器或 SDK 路径与终端不同 | Windows 核对 `.venv-sdk` 解释器、脚本所在目录及同目录的 SDK 文件。Linux 从设置好库路径的 `venv311` 终端启动。用 `sys.executable` 和 `api.__file__` 检查实际路径，调整解释器后重启内核 |
+| Spyder 中的解释器或 SDK 路径与终端不同 | Windows 使用脚本目录的 `.venv-sdk`，Linux 使用 `venv311`。联机脚本还需核对同目录的 SDK 文件，Linux 需设置 `LD_LIBRARY_PATH`。用 `sys.executable` 和 `api.__file__` 检查实际路径，调整解释器后重启内核 |
 | Linux 的 Spyder 图窗打不开 | 检查当前会话是否有图形桌面，再核对 Qt 图形后端选择。若启动终端提示 Qt 平台插件加载失败，按报错检查发行版的系统图形依赖 |
 | `None` 句柄或设备打开失败 | 核对地址前缀、CMake 实际启用的后端、主机驱动和访问权限。先用 [基础 C 测试](c-api.md#43-基础测试程序) 验证同一设备 |
 | 样点数异常、通道错位 | 检查掩码、数组的 `int16` 类型与连续性，以及每路点数。`0x5` 需要两个连续的通道块，按掩码置位顺序存放 |
