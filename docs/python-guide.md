@@ -115,30 +115,23 @@ Compress-Archive -Path "$prefix\bin\*.py", "$prefix\bin\*.pyd", "$prefix\bin\*.d
 
 在运行机安装 **CPython 3.11 x64** 和 **Microsoft Visual C++ v14 x64 Redistributable**。运行机只需这些运行依赖和例程所用的 Python 库。连接板卡时再按传输方式安装相应驱动。[CPython 3.11.9](https://www.python.org/downloads/release/python-3119/) · [下载 VC++ x64 运行库](https://aka.ms/vc14/vc_redist.x64.exe) · [设备驱动准备](c-api.md#231-准备编译工具和驱动)
 
-在普通 PowerShell 执行以下命令。把 `$zip` 指向实际收到的 ZIP，使用 USB3 版时文件名应含 `usb3`。如果交付包解压后自带 `bin` 子目录，把 `PYTHONPATH` 指向实际包含 `.py`、`.pyd` 和 DLL 的目录。
+在普通 PowerShell 中，把第一行引号内的路径改为实际的例程目录，第二行引号内的路径改为收到的 ZIP 文件路径。选择 USB3 版时使用对应的 ZIP。更换版本前先移出同名旧文件。已有 `.venv-sdk` 时跳过第三行。
 
 ```powershell
-$ErrorActionPreference = 'Stop'
-$zip = "$env:USERPROFILE\Downloads\libyunsdr-26.00.00.1-cp311-win64-pciex-pcies.zip"
-$workDir = Join-Path $env:USERPROFILE 'YunSDR'
-New-Item -ItemType Directory -Force -Path $workDir | Out-Null
-Set-Location -LiteralPath $workDir
-$runtime = Join-Path $workDir ([IO.Path]::GetFileNameWithoutExtension($zip))
-Expand-Archive -LiteralPath $zip -DestinationPath $runtime -Force
-
-py -3.11 -c "import sys, sysconfig; assert sys.version_info[:2] == (3, 11) and sysconfig.get_platform() == 'win-amd64'; print(sys.version)"
-if ($LASTEXITCODE -ne 0) { throw 'Select x64 CPython 3.11 before running the SDK.' }
+Set-Location -LiteralPath 'C:\YunSDR\python_20260213'
+Expand-Archive -LiteralPath 'C:\YunSDR\libyunsdr-26.00.00.1-cp311-win64-pciex-pcies.zip' -DestinationPath .
 py -3.11 -m venv .venv-sdk
-if ($LASTEXITCODE -ne 0) { throw 'Could not create .venv-sdk.' }
-$py = (Resolve-Path .\.venv-sdk\Scripts\python.exe).Path
-& $py -m pip install numpy
-if ($LASTEXITCODE -ne 0) { throw 'Could not install NumPy.' }
-$env:PYTHONPATH = $runtime
-& $py -P -c "import yunsdr_ss_api as api, _yunsdr_ss_api as ext; print(api.__file__); print(ext.__file__); ticks = api.yunsdr_timeNsToTicks(500000, 30720000.0); assert ticks == 15360, ticks; print('ticks =', ticks)"
-if ($LASTEXITCODE -ne 0) { throw 'Python import or tick conversion failed.' }
 ```
 
-确认两个模块都来自解压目录，且输出 `ticks = 15360`。接下来在同一终端使用 `$py` 运行例程。若提示 `DLL load failed`，先核对 CPython 为 x64、VC++ 运行库已安装、同版 DLL 和 `_yunsdr_ss_api.pyd` 位于同一目录。USB3 版同时核对 `libusb-1.0.dll`。
+确认例程目录中有同一套 `yunsdr_ss_api.py`、`_yunsdr_ss_api.pyd` 和 `libyunsdr_ss.dll`。USB3 版还要有 `libusb-1.0.dll`。如果文件解压在 `bin` 子目录，将它们复制到脚本旁。
+
+在同一目录验证导入，无需设置 `PYTHONPATH`。输出应显示当前目录下的模块路径和 `ticks = 15360`。
+
+```powershell
+& .\.venv-sdk\Scripts\python.exe -E -c "import yunsdr_ss_api as api, _yunsdr_ss_api as ext; print(api.__file__, ext.__file__, sep='\n'); print('ticks =', api.yunsdr_timeNsToTicks(500000, 30720000.0))"
+```
+
+若提示 `DLL load failed`，核对 Python 的位数、VC++ x64 运行库和同目录的 DLL 文件。运行例程时按第 2.3.3 节安装所需的 Python 库并用相对路径启动。[PowerShell 运行例程](#233-在-powershell-运行-python-例程)
 
 #### 2.1.4 使用 MinGW-w64 和 SWIG 构建 Python 绑定
 
@@ -436,10 +429,10 @@ if __name__ == "__main__":
     main()
 ```
 
-在步骤 2 设置好路径的终端运行。按机型改用 `pcies:0.0` 或 `usb3:0` 时，确认加载的是已启用该后端的构建。若输出文件已存在，改用另一个文件名或先移走旧文件。
+在例程目录运行。Windows 按第 2.3.1 和 2.3.3 节准备 `.venv-sdk`、NumPy 和同目录的 SDK 文件。Linux 沿用第 2.2.2 节设置的解释器和库路径。按机型改用 `pcies:0.0` 或 `usb3:0` 时，确认加载的构建启用了该后端。若输出文件已存在，改用另一个文件名或先移走旧文件。
 
 ```powershell
-& $py .\rx_once.py 'pciex:0' --count 30720 --output rx_ch1.iq16
+& .\.venv-sdk\Scripts\python.exe .\rx_once.py 'pciex:0' --count 30720 --output rx_ch1.iq16
 (Get-Item -LiteralPath .\rx_ch1.iq16).Length
 ```
 
