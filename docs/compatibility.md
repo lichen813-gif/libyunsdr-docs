@@ -7,6 +7,7 @@
 | 无板卡构建 | — | `26.00.00.1` | — | Windows x64，VS2019 16.11 / MSVC 19.29；驱动未参与 | PCIEX、PCIES、USB3（libusb 1.0.29） | Release 构建与安装通过，速率例程帮助可运行；首帧程序编译及链接已验证 |
 | 无板卡构建 | — | `26.00.00.1` | — | Windows x64，VS2019，libusb 1.0.29 | 仅 USB3，固件更新关闭 | Release 构建与安装通过 |
 | 无板卡通信实验构建 | — | `26.00.00.1` | — | Windows x64，VS2019，PortAudio 19.7.0、FFTW 3.3.5、libusb 1.0.29 | PCIEX、PCIES；另验证三种后端同时开启 | FM 音频、视频和相位校正目标的 Release 构建、安装及帮助输出通过 |
+| 无板卡 Python 绑定 | — | `26.00.00.1` | — | Windows x64，VS2019、CPython 3.11.9、SWIG 4.2.1；USB3 构建使用 libusb 1.0.29 | PCIEX、PCIES；另验证三种后端同时开启 | Release 构建、安装、导入及 tick 换算通过。Linux Python 构建和设备联机待验证。[Python 开发指南](python-guide.md) |
 | [IQX8400](devices/iqx8400.md) | Rev1.1 | `26.00.00.1` 待联机 | 待记录 | Windows x64，配套 PCIe 驱动版本待记录 | `pciex:` / `pcies:` 取决于交付组合 | 设备打开、版本查询、采集、发射、双工及同步待验证 |
 | [IQX8400](devices/iqx8400.md) | Rev1.1 | `26.00.00.1` 待联机 | 待记录 | Linux x86-64，发行版、内核和驱动版本待记录 | `pciex:` / `pcies:` 取决于交付组合 | 待构建、安装及联机验证 |
 | 待确认 | 待记录 | `26.00.00.1` | 待记录 | Linux AArch64，发行版、内核和驱动版本待记录 | 由产品交付配置决定 | 已检查包内 AArch64 静态依赖的架构，待构建及联机验证 |
