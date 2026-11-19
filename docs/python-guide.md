@@ -346,41 +346,23 @@ if ($LASTEXITCODE -ne 0) { throw 'Could not install NumPy.' }
 
 #### 2.3.2 安装并启动 Spyder
 
-Spyder 是可选的图形调试工具，需要时在刚才的 `.venv-sdk` 中用 pip 安装。pip 会解析匹配的 `spyder-kernels` 和 Qt 依赖。波形分析和绘图例程所需的库可以按用途补装。[Spyder 的 pip 安装说明](https://docs.spyder-ide.org/current/installation.html#using-pip)
+在 PowerShell 中进入例程目录，使用与脚本同级的 `.venv-sdk`。如果还没有虚拟环境，先在该目录执行 `py -3.11 -m venv .venv-sdk`。首次调试 `test_cofdm.py` 时，安装 Spyder 和例程依赖。pip 会安装匹配的 `spyder-kernels` 和 Qt 依赖。[Spyder 的 pip 安装说明](https://docs.spyder-ide.org/current/installation.html#using-pip)
 
 ```powershell
-& $py -m pip install spyder
-if ($LASTEXITCODE -ne 0) { throw 'Could not install Spyder.' }
-& $py -m pip check
-if ($LASTEXITCODE -ne 0) { throw 'The virtual environment has conflicting dependencies.' }
-& $py -m pip show spyder spyder-kernels
-# 配套波形分析和绘图脚本需要时执行
-# & $py -m pip install matplotlib scipy PyQt5 ModulationPy
+& .\.venv-sdk\Scripts\python.exe -m pip install spyder numpy matplotlib ModulationPy
 ```
 
-若当前配置的 pip 镜像无法连接，可用 `& $py -m pip install --index-url https://pypi.org/simple spyder` 从 PyPI 重试，再执行依赖检查。
+若 pip 镜像无法连接，可在安装命令的 `install` 后加上 `--index-url https://pypi.org/simple`。
 
-从当前 PowerShell 启动 Spyder。若已按第 2.1 节设置 `PYTHONPATH`，只运行第二行。若新开了终端，把第一行的示例路径换成实际包含 `yunsdr_ss_api.py`、`_yunsdr_ss_api.pyd` 和 `libyunsdr_ss.dll` 的目录。预编译包使用其解压目录或包内的 `bin` 目录。
+在同一目录执行以下命令。Spyder 会打开一个新实例，使用当前目录作为工作目录，并打开 `test_cofdm.py`。
 
 ```powershell
-$env:PYTHONPATH = (Resolve-Path -LiteralPath .\sdk-win64-python-v143-pciex-pcies\bin).Path
-& (Join-Path (Split-Path -Parent $py) 'spyder.exe') --new-instance
+& .\.venv-sdk\Scripts\spyder.exe --new-instance --workdir . .\test_cofdm.py
 ```
 
-在 Spyder 的 IPython 控制台运行以下命令。解释器应来自 `.venv-sdk`，两个模块应来自 `PYTHONPATH` 指定的目录，最后输出 `15360`。
+在编辑器按 **F5** 运行。若工作目录被运行配置改动，在「运行 → 每个文件的配置」中将它设为脚本所在目录。`test_cofdm.py` 可以离线运行。若调试调用 libyunsdr 的脚本，按第 2.3.3 节将同一套 `.py`、`.pyd` 和 DLL 放在脚本旁，无需设置 `PYTHONPATH`。[Spyder 运行配置](https://docs.spyder-ide.org/current/panes/editor.html#run-configuration)
 
-```python
-import sys
-import yunsdr_ss_api as api
-import _yunsdr_ss_api as ext
-
-print(sys.executable)
-print(api.__file__)
-print(ext.__file__)
-print(api.yunsdr_timeNsToTicks(500000, 30720000.0))
-```
-
-若已单独安装 Spyder，或控制台用了其他解释器，在「首选项 → Python 解释器」中选择上面检查过的 `.venv-sdk\Scripts\python.exe`，然后重启内核。按控制台提示的版本范围在该虚拟环境补装 `spyder-kernels`。可打开配套 `test_cofdm.py` 做离线调试，将工作目录设为脚本和输入文件所在目录。需要独立图窗时，在 IPython 控制台的绘图首选项中选择可用的 Qt 后端。[Spyder 解释器配置](https://docs.spyder-ide.org/current/faq.html) · [参考例程与截图](#73-测试截图)
+若控制台使用了其他解释器，在「首选项 → Python 解释器」选择例程目录下的 `.venv-sdk\Scripts\python.exe`，然后重启内核。先前单独安装的 Spyder 若提示需要匹配版本的 `spyder-kernels`，按提示将它安装到该虚拟环境。[Spyder 解释器配置](https://docs.spyder-ide.org/current/faq.html)
 
 #### 2.3.3 在 PowerShell 运行 Python 例程
 
@@ -645,7 +627,7 @@ print(offset_hz, amplitude_dbfs, phase_deg)
 | --- | --- |
 | `No module named 'yunsdr_ss_api'` | 检查 `PYTHONPATH` 和解释器。包装文件 `yunsdr_ss_api.py` 应与生成的扩展一同存在 |
 | Windows `DLL load failed` 或 Linux `cannot open shared object file` | 检查 Python 版本和位数、生成扩展的路径与同版 `libyunsdr_ss`。USB3 检查 libusb 动态库。Linux 在测试终端用 `ldd` 核对 |
-| Spyder 中的解释器或 SDK 路径与终端不同 | Windows 使用 `.venv-sdk`，Linux 使用 `venv311`。从设置好库路径的终端启动 Spyder，核对 `sys.executable` 和 `api.__file__`。调整解释器后重启内核，调整终端环境变量后从该终端重启 Spyder |
+| Spyder 中的解释器或 SDK 路径与终端不同 | Windows 核对 `.venv-sdk` 解释器、脚本所在目录及同目录的 SDK 文件。Linux 从设置好库路径的 `venv311` 终端启动。用 `sys.executable` 和 `api.__file__` 检查实际路径，调整解释器后重启内核 |
 | Linux 的 Spyder 图窗打不开 | 检查当前会话是否有图形桌面，再核对 Qt 图形后端选择。若启动终端提示 Qt 平台插件加载失败，按报错检查发行版的系统图形依赖 |
 | `None` 句柄或设备打开失败 | 核对地址前缀、CMake 实际启用的后端、主机驱动和访问权限。先用 [基础 C 测试](c-api.md#43-基础测试程序) 验证同一设备 |
 | 样点数异常、通道错位 | 检查掩码、数组的 `int16` 类型与连续性，以及每路点数。`0x5` 需要两个连续的通道块，按掩码置位顺序存放 |
