@@ -384,22 +384,23 @@ print(api.yunsdr_timeNsToTicks(500000, 30720000.0))
 
 #### 2.3.3 在 PowerShell 运行 Python 例程
 
-在普通 Windows PowerShell 中进入例程目录，保留配套的 `test_cofdm.py`、`cofdm_tx.py` 和 `cofdm_rx.py`。如果例程调用 libyunsdr，将同一次构建或同一预编译包中的 `yunsdr_ss_api.py`、`_yunsdr_ss_api.pyd` 和 `libyunsdr_ss.dll` 复制到该目录。USB3 版同时复制 `libusb-1.0.dll`。文件放在脚本旁即可直接导入，无需设置 `PYTHONPATH`。
+在 PowerShell 中进入包含 `test_cofdm.py`、`cofdm_tx.py` 和 `cofdm_rx.py` 的例程目录。以下命令使用与脚本同级的 `.venv-sdk`。如果当前目录还没有虚拟环境，先执行 `py -3.11 -m venv .venv-sdk`。
 
-首次运行时，用第 2.3.1 节创建的 `.venv-sdk` 安装例程依赖。下面以预编译包的工作目录为例。如果虚拟环境建在其他位置，将 `$py` 改为实际的 `python.exe` 路径。
-
-```powershell
-$py = "$env:USERPROFILE\YunSDR\.venv-sdk\Scripts\python.exe"
-& $py -m pip install numpy matplotlib ModulationPy
-```
-
-依赖装好后，在同一个 PowerShell 窗口直接运行。`test_cofdm.py` 是离线仿真，无需复制 SDK 文件或连接板卡，也无需启动 Spyder。
+首次运行时安装例程依赖。
 
 ```powershell
-& $py .\test_cofdm.py
+& .\.venv-sdk\Scripts\python.exe -m pip install numpy matplotlib ModulationPy
 ```
 
-配套例程会在当前目录写入或覆盖 `rf_data.bin`，并用 Matplotlib 显示结果。关闭图窗后，终端会打印 EVM 和频偏等结果。运行其他脚本时，替换命令中的文件名即可。[OFDM 结果示例](#73-测试截图)
+依赖装好后，直接用相对路径运行脚本，无需激活虚拟环境或启动 Spyder。
+
+```powershell
+& .\.venv-sdk\Scripts\python.exe .\test_cofdm.py
+```
+
+`test_cofdm.py` 是离线仿真，无需复制 SDK 文件或连接板卡。脚本会在当前目录写入或覆盖 `rf_data.bin`，关闭 Matplotlib 图窗后，终端会打印 EVM 和频偏等结果。[OFDM 结果示例](#73-测试截图)
+
+运行其他例程时，替换命令中的脚本名。如果脚本调用 libyunsdr，把同一次构建或同一预编译包中的 `yunsdr_ss_api.py`、`_yunsdr_ss_api.pyd` 和 `libyunsdr_ss.dll` 复制到脚本旁。USB3 版同时复制 `libusb-1.0.dll`。文件放在脚本旁即可直接导入，无需设置 `PYTHONPATH`。
 
 ## 3. Python 调用约定
 
