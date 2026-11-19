@@ -2,7 +2,7 @@
 
 本指南以 `libyunsdr-26-01-00.1.zip` 为基线，包内 SDK 版本为 **`26.00.00.1`**。使用 SWIG 绑定 `yunsdr_ss_api` 配置设备和传输 IQ16 数据。安装设备驱动、核对固件及选择 `pciex:`、`pcies:` 或 `usb3:` 时，参照 [C API 手册的驱动与构建章节](c-api.md#2-下载构建与安装)。
 
-[构建与导入](#2-构建与导入-python-绑定) · [Linux 与 Spyder](#22-linux-x86-64-与-aarch64) · [首帧接收](#4-接收首帧-iq) · [射频配置](#5-配置射频与时间戳) · [循环发射](#6-生成波形与循环发射) · [测试截图](#73-测试截图) · [排查问题](#8-常见问题)
+[Windows x64](#21-windows-x64) · [Linux 与 Spyder](#22-linux-x86-64-与-aarch64) · [首帧接收](#4-接收首帧-iq) · [射频配置](#5-配置射频与时间戳) · [循环发射](#6-生成波形与循环发射) · [测试截图](#73-测试截图) · [排查问题](#8-常见问题)
 
 ## 1. 获取 SDK 和例程
 
@@ -11,7 +11,7 @@
 | `libyunsdr-26-01-00.1.zip` | 交付源码、C 库构建工程、SWIG 接口文件 `swig/yunsdr_ss_api.i` 和 `swig/python/yunsdr_ss/example/` 下的基础脚本。ZIP 哈希见 [交付版本核对](c-api.md#1-交付版本核对) |
 | `python_20260213.7z` | 另配的 Python 参考例程包，配套说明列有循环收发、单独发送、OFDM 和相位校准脚本。通过产品资料下载时，在 **Python API基础和基础程序** 中选择此包并按提示填写产品编号。该参考包未随上述 ZIP 交付，文件内容及与新版绑定的匹配关系需根据实际配套资料核对 |
 
-解压 SDK 后，在包含 `CMakeLists.txt` 的根目录执行构建。按当前解释器、CPU 架构和同版源码重新生成绑定。SDK ZIP 中 `swig/python/yunsdr_ss/old/` 内的二进制和脚本属于历史例程，下面使用新生成的产物。
+从源码构建时，解压 SDK 并在包含 `CMakeLists.txt` 的根目录操作。只运行 Windows 例程时，可以使用同版的 [预编译绑定](#213-直接使用预编译包)。SDK ZIP 的 `swig/python/yunsdr_ss/old/` 保存的是历史例程及二进制文件。
 
 ## 2. 构建与导入 Python 绑定
 
@@ -19,44 +19,119 @@
 
 ### 2.1 Windows x64
 
-1. 安装 x64 的 [Python 3.11.9](https://www.python.org/downloads/release/python-3119/)、Visual Studio 2019 C++ 桌面开发工具及 CMake 3.16 或更新版本。解压 [SWIG 4.2.1](https://github.com/swig/swig/releases/tag/v4.2.1) 的 Windows 包，确保 PowerShell 能找到 `swig.exe`。在 PowerShell 检查 `py -3.11 --version` 和 `swig -version`。
-2. 从 SDK 源码根目录创建虚拟环境。下面用 `.venv-sdk` 运行脚本并生成配套扩展。
+从源码构建可选独立的 Visual Studio 2022 Build Tools，省去完整的 Visual Studio IDE。已有匹配的预编译包时，可直接按第 2.1.3 节运行。SDK 已在 VS2019 / MSVC `v142` 上验证构建和导入，独立 VS2022 Build Tools 的验证状态见 [兼容矩阵](compatibility.md)。
+
+#### 2.1.1 安装 Visual Studio 2022 Build Tools
+
+1. 从 Microsoft 下载并运行 **Visual Studio 2022 Build Tools** 安装程序。在 **工作负载** 选择 **使用 C++ 的桌面开发**（Desktop development with C++）。工作负载会自动安装 MSBuild 和 C++ 核心组件。[VS2022 Build Tools 下载](https://aka.ms/vs/17/release/vs_BuildTools.exe)
+2. 在右侧 **安装详细信息** 或 **单个组件** 中，保留或勾选 **MSVC v143 - VS 2022 C++ x64/x86 生成工具**，以及一套 **Windows 10 SDK** 或 **Windows 11 SDK**。使用安装程序提供的 CMake 时，再勾选 **适用于 Windows 的 C++ CMake 工具**。已有独立 CMake 3.21 或更新版本时，可省去 CMake 组件。若要复用 VS2019 基线的编译器，再勾选 **MSVC v142 - VS 2019 C++ x64/x86 生成工具（v14.29）**。本工程可省去 AddressSanitizer、测试工具、MFC、ATL、Clang 和 ARM/ARM64 工具。[Build Tools 组件清单](https://learn.microsoft.com/en-us/visualstudio/install/workload-component-id-vs-build-tools?view=vs-2022) · [CMake 生成器说明](https://cmake.org/cmake/help/latest/generator/Visual%20Studio%2017%202022.html)
+3. 安装 **Windows installer (64-bit)** 版 CPython 3.11.9，保留 Python Launcher。将 SWIG 4.2.1 Windows 包解压到本地，把 `swig.exe` 所在目录加到用户 `Path`。使用独立 CMake 时，也把 `cmake.exe` 所在目录加到 `Path`。[CPython 3.11.9](https://www.python.org/downloads/release/python-3119/) · [SWIG 4.2.1](https://github.com/swig/swig/releases/tag/v4.2.1) · [CMake 下载](https://cmake.org/download/)
+4. 从开始菜单打开 **Developer PowerShell for VS 2022**，检查工具版本。`cl` 此处用于显示编译器版本，构建目标架构由下一节的 `-A x64` 指定。
 
    ```powershell
-   py -3.11 -m venv .venv-sdk
-   $py = (Resolve-Path .\.venv-sdk\Scripts\python.exe).Path
-   & $py -m pip install numpy
-   & $py -c "import struct,sys; print(sys.version); print(struct.calcsize('P') * 8)"
+   cmake --version
+   swig -version
+   py -3.11 --version
+   cl
    ```
 
-3. 配置并编译 Release。提前创建 `sdk-win64-python\bin`，因为本包的构建规则会将 Python 文件复制到该目录。检查 CMake 输出中选择的 Python 解释器、开发组件和 SWIG 路径。
+#### 2.1.2 编译安装并验证导入
 
-   ```powershell
-   $swig = (Get-Command swig.exe).Source
-   $prefix = Join-Path (Get-Location).Path "sdk-win64-python"
-   New-Item -ItemType Directory -Force -Path "$prefix\bin" | Out-Null
-   cmake -S . -B build-win64-python -G "Visual Studio 16 2019" -A x64 `
-     -DCMAKE_BUILD_TYPE=Release "-DCMAKE_INSTALL_PREFIX=$prefix" `
-     "-DPython_EXECUTABLE=$py" "-DSWIG_EXECUTABLE=$swig" `
-     -DENABLE_PYTHON=ON -DBUILD_PYTHON=ON -DENABLE_EXAMPLE=OFF -DENABLE_COMLABS=OFF `
-     -DENABLE_PCIEX=ON -DENABLE_PCIES=ON -DENABLE_PCIE=OFF -DENABLE_SFP=OFF -DENABLE_USB3=OFF
-   cmake --build build-win64-python --config Release --parallel 4
-   cmake --install build-win64-python --config Release
-   Get-ChildItem -LiteralPath "$prefix\bin"
-   $env:PYTHONPATH = "$prefix\bin"
-   & $py -c "import yunsdr_ss_api as api, _yunsdr_ss_api as ext; print(api.__file__); print(ext.__file__)"
-   ```
+将 SDK 解压到不含空格的路径，例如 `C:\YunSDR\libyunsdr-26-01-00.1`，在同一 PowerShell 进入含 `CMakeLists.txt` 的源码根目录。本交付包的 `gen_build_info` 规则会在含空格的源码路径下失败。源码 ZIP 缺少 Git 元数据时，构建日志可能提示 `not a git repository`，以 CMake 和构建命令的退出状态为准。
 
-4. 检查 `bin` 下的 `yunsdr_ss_api.py`、`_yunsdr_ss_api.pyd` 和 `libyunsdr_ss.dll`。导入结果打印的两个路径均应指向本次安装目录。新开终端时，从源码根目录重新设置上述 `$py`、`$prefix` 和 `PYTHONPATH`。
+以下配置构建 PCIEX 和 PCIES 版。需要同时启用 USB3 时，先解压 libusb 1.0.29 的 Windows 二进制包，设置 `$enableUsb3 = $true`，并把 `$usb` 改为解压后的实际路径（其下应有 `include` 和 `VS2022`）。两种配置使用各自的构建和安装目录。[libusb 1.0.29 发布包](https://github.com/libusb/libusb/releases/tag/v1.0.29)
 
-**加入 USB3。** 使用独立的 `build-win64-python-usb` 和 `sdk-win64-python-usb`。将上面的 `ENABLE_USB3` 改为 `ON`，按 [Windows USB3 构建](c-api.md#233-加入-usb3-支持) 指定 `LIBUSB_HEADER_FILE` 和 `usb_LIBRARY`。安装后将 `lib\libusb-1.0.dll` 复制到 `bin`，与 `libyunsdr_ss.dll` 和 `_yunsdr_ss_api.pyd` 放在一起。更新 `PYTHONPATH`，重做导入检查。
+```powershell
+$ErrorActionPreference = 'Stop'
+py -3.11 -c "import sys, sysconfig; assert sys.version_info[:2] == (3, 11) and sysconfig.get_platform() == 'win-amd64'; print(sys.version)"
+if ($LASTEXITCODE -ne 0) { throw 'Select x64 CPython 3.11 before building.' }
+py -3.11 -m venv .venv-sdk
+if ($LASTEXITCODE -ne 0) { throw 'Could not create .venv-sdk.' }
+$py = (Resolve-Path .\.venv-sdk\Scripts\python.exe).Path
+& $py -m pip install numpy
+if ($LASTEXITCODE -ne 0) { throw 'Could not install NumPy.' }
+$pythonHome = & $py -c "import sys; print(sys.base_prefix)"
+$swig = (Get-Command swig.exe).Source
 
-   ```powershell
-   $prefix = Join-Path (Get-Location).Path "sdk-win64-python-usb"
-   Copy-Item -LiteralPath "$prefix\lib\libusb-1.0.dll" -Destination "$prefix\bin"
-   $env:PYTHONPATH = "$prefix\bin"
-   & $py -c "import yunsdr_ss_api as api; print(api.__file__)"
-   ```
+$generator = 'Visual Studio 17 2022'
+$toolset = 'v143'
+$enableUsb3 = $false
+$profile = 'pciex-pcies'
+$usbArgs = @('-DENABLE_USB3=OFF')
+if ($enableUsb3) {
+    $profile = 'pciex-pcies-usb3'
+    $usb = 'C:\YunSDR\deps\libusb-1.0.29'
+    $usbVs = if ($toolset -eq 'v142') { 'VS2019' } else { 'VS2022' }
+    $usbHeader = (Resolve-Path -LiteralPath "$usb\include\libusb.h").Path
+    $usbLib = (Resolve-Path -LiteralPath "$usb\$usbVs\MS64\dll\libusb-1.0.lib").Path
+    $usbArgs = @('-DENABLE_USB3=ON', "-DLIBUSB_HEADER_FILE=$usbHeader", "-Dusb_LIBRARY=$usbLib")
+}
+
+$buildDir = "build-win64-python-$toolset-$profile"
+$prefix = Join-Path (Get-Location).Path "sdk-win64-python-$toolset-$profile"
+New-Item -ItemType Directory -Force -Path "$prefix\bin" | Out-Null
+cmake -S . -B $buildDir -G $generator -A x64 -T $toolset `
+  -DCMAKE_BUILD_TYPE=Release "-DCMAKE_INSTALL_PREFIX=$prefix" `
+  "-DPython_EXECUTABLE=$py" "-DPython_ROOT_DIR=$pythonHome" "-DSWIG_EXECUTABLE=$swig" `
+  -DENABLE_PYTHON=ON -DBUILD_PYTHON=ON -DENABLE_EXAMPLE=OFF -DENABLE_COMLABS=OFF `
+  -DENABLE_PCIEX=ON -DENABLE_PCIES=ON -DENABLE_PCIE=OFF -DENABLE_SFP=OFF @usbArgs
+if ($LASTEXITCODE -ne 0) { throw 'CMake configuration failed.' }
+cmake --build $buildDir --config Release --parallel 4
+if ($LASTEXITCODE -ne 0) { throw 'Release build failed.' }
+cmake --install $buildDir --config Release
+if ($LASTEXITCODE -ne 0) { throw 'Release installation failed.' }
+if ($enableUsb3) {
+    Copy-Item -LiteralPath "$prefix\lib\libusb-1.0.dll" -Destination "$prefix\bin"
+}
+
+Get-ChildItem -LiteralPath "$prefix\bin"
+$env:PYTHONPATH = "$prefix\bin"
+& $py -P -c "import yunsdr_ss_api as api, _yunsdr_ss_api as ext; print(api.__file__); print(ext.__file__); ticks = api.yunsdr_timeNsToTicks(500000, 30720000.0); assert ticks == 15360, ticks; print('ticks =', ticks)"
+if ($LASTEXITCODE -ne 0) { throw 'Python import or tick conversion failed.' }
+```
+
+配置输出应找到目标 Python 的 `Interpreter`、`Development` 和 SWIG。`bin` 中应有 `yunsdr_ss_api.py`、`_yunsdr_ss_api.pyd`、`libyunsdr_ss.dll`，USB3 构建还应有 `libusb-1.0.dll`。验证输出应来自本次安装的 `bin`，最后一行是 `ticks = 15360`。这项检查无需连接板卡。新开终端后，从源码根目录重新设置 `$py`、`$prefix` 和 `PYTHONPATH`。
+
+在 VS2022 Build Tools 中已加装 `v142` 时，将 `$toolset` 改成 `'v142'`，继续使用 `Visual Studio 17 2022` 生成器。使用现有 VS2019 时，在 VS2019 的 Developer PowerShell 进入新的源码解压目录，将 `$generator` 改成 `'Visual Studio 16 2019'`、`$toolset` 改成 `'v142'` 后执行同一组命令。构建目录中的 CMake 缓存绑定到首次使用的生成器和工具集。
+
+#### 2.1.3 直接使用预编译包
+
+在编译机完成第 2.1.2 节后，可以把同一次 Release 安装中的运行文件打成 ZIP，给另一台 Windows x64 电脑使用。若已从交付方取得同版预编译包，可直接解压验证。以下 ZIP 名称包含 SDK 版本、Python 版本、架构和启用的后端。
+
+```powershell
+$runtimeFiles = @('yunsdr_ss_api.py', '_yunsdr_ss_api.pyd', 'libyunsdr_ss.dll')
+if ($enableUsb3) { $runtimeFiles += 'libusb-1.0.dll' }
+$runtimeFiles = $runtimeFiles | ForEach-Object { Join-Path "$prefix\bin" $_ }
+$zip = "libyunsdr-26.00.00.1-cp311-win64-$profile.zip"
+Compress-Archive -LiteralPath $runtimeFiles -DestinationPath $zip -Force
+```
+
+在运行机安装 **CPython 3.11 x64** 和 **Microsoft Visual C++ v14 x64 Redistributable**。运行机只需这些运行依赖和例程所用的 Python 库。连接板卡时再按传输方式安装相应驱动。[CPython 3.11.9](https://www.python.org/downloads/release/python-3119/) · [下载 VC++ x64 运行库](https://aka.ms/vc14/vc_redist.x64.exe) · [设备驱动准备](c-api.md#231-准备编译工具和驱动)
+
+在普通 PowerShell 执行以下命令。把 `$zip` 指向实际收到的 ZIP，使用 USB3 版时文件名应含 `usb3`。如果交付包解压后自带 `bin` 子目录，把 `PYTHONPATH` 指向实际包含 `.py`、`.pyd` 和 DLL 的目录。
+
+```powershell
+$ErrorActionPreference = 'Stop'
+$zip = "$env:USERPROFILE\Downloads\libyunsdr-26.00.00.1-cp311-win64-pciex-pcies.zip"
+$workDir = Join-Path $env:USERPROFILE 'YunSDR'
+New-Item -ItemType Directory -Force -Path $workDir | Out-Null
+Set-Location -LiteralPath $workDir
+$runtime = Join-Path $workDir ([IO.Path]::GetFileNameWithoutExtension($zip))
+Expand-Archive -LiteralPath $zip -DestinationPath $runtime -Force
+
+py -3.11 -c "import sys, sysconfig; assert sys.version_info[:2] == (3, 11) and sysconfig.get_platform() == 'win-amd64'; print(sys.version)"
+if ($LASTEXITCODE -ne 0) { throw 'Select x64 CPython 3.11 before running the SDK.' }
+py -3.11 -m venv .venv-sdk
+if ($LASTEXITCODE -ne 0) { throw 'Could not create .venv-sdk.' }
+$py = (Resolve-Path .\.venv-sdk\Scripts\python.exe).Path
+& $py -m pip install numpy
+if ($LASTEXITCODE -ne 0) { throw 'Could not install NumPy.' }
+$env:PYTHONPATH = $runtime
+& $py -P -c "import yunsdr_ss_api as api, _yunsdr_ss_api as ext; print(api.__file__); print(ext.__file__); ticks = api.yunsdr_timeNsToTicks(500000, 30720000.0); assert ticks == 15360, ticks; print('ticks =', ticks)"
+if ($LASTEXITCODE -ne 0) { throw 'Python import or tick conversion failed.' }
+```
+
+确认两个模块都来自解压目录，且输出 `ticks = 15360`。接下来在同一终端使用 `$py` 运行例程。若提示 `DLL load failed`，先核对 CPython 为 x64、VC++ 运行库已安装、同版 DLL 和 `_yunsdr_ss_api.pyd` 位于同一目录。USB3 版同时核对 `libusb-1.0.dll`。
 
 ### 2.2 Linux x86-64 与 AArch64
 
