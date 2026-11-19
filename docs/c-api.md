@@ -192,7 +192,7 @@ $env:Path = "$prefix\lib;$env:Path"
 if ($LASTEXITCODE -ne 0) { throw 'C API test failed.' }
 ```
 
-**PCIES 和固件更新。** 本交付包在 MinGW 下会自动选中 Linux 的 `libpcies.a` 和 `libfirmware.a`。显式指定随包的 Windows `.lib` 后，链接仍缺少 `__security_check_cookie` 等 MSVC 运行库符号。使用这些功能时按第 2.3.2 或 2.3.3 节用 MSVC 构建。MinGW 的 Python `.pyd` 构建和板卡联机收发尚待验证。
+**PCIES 和固件更新。** 本交付包在 MinGW 下会自动选中 Linux 的 `libpcies.a` 和 `libfirmware.a`。显式指定随包的 Windows `.lib` 后，链接仍缺少 `__security_check_cookie` 等 MSVC 运行库符号。使用这些功能时按第 2.3.2 或 2.3.3 节用 MSVC 构建。板卡联机收发尚待验证。PCIEX 和 USB3 的 Python 绑定构建及导入步骤见 [MinGW-w64 和 SWIG 构建 Python 绑定](python-guide.md#214-使用-mingw-w64-和-swig-构建-python-绑定)。
 
 ### 2.4 Linux x86-64 与 AArch64
 
