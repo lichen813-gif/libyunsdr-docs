@@ -328,21 +328,15 @@ Linux 原生编译、Spyder 图形调试和联机验证状态见 [兼容矩阵](
 
 #### 2.3.1 创建或复用 .venv-sdk
 
-安装 CPython 3.11 x64 并保留 Python Launcher。打开普通 PowerShell，用 `Set-Location 'C:\YunSDR\libyunsdr-26-01-00.1'` 进入 SDK 源码根目录，按实际解压位置修改路径。若正在使用第 2.1.3 节的预编译包，则运行 `Set-Location "$env:USERPROFILE\YunSDR"` 进入其工作目录。在该目录执行下面的命令。已有 `.venv-sdk` 时会直接复用并检查版本。[CPython 3.11.9 安装包](https://www.python.org/downloads/release/python-3119/)
+安装 CPython 3.11 x64 并保留 Python Launcher。打开 PowerShell，把第一行 `Set-Location` 单引号里的路径改成实际的例程目录，也就是存放 `test_cofdm.py` 的目录。`.venv-sdk` 会建在该目录下。[CPython 3.11.9 安装包](https://www.python.org/downloads/release/python-3119/)
 
 ```powershell
-if (-not (Test-Path -LiteralPath .\.venv-sdk\Scripts\python.exe)) {
-    py -3.11 -m venv .venv-sdk
-    if ($LASTEXITCODE -ne 0) { throw 'Could not create .venv-sdk.' }
-}
-$py = (Resolve-Path -LiteralPath .\.venv-sdk\Scripts\python.exe).Path
-& $py -c "import sys, sysconfig; assert sys.version_info[:2] == (3, 11) and sysconfig.get_platform() == 'win-amd64'; print(sys.executable); print(sys.version)"
-if ($LASTEXITCODE -ne 0) { throw 'Use a virtual environment created with x64 CPython 3.11.' }
-& $py -m pip install numpy
-if ($LASTEXITCODE -ne 0) { throw 'Could not install NumPy.' }
+Set-Location -LiteralPath 'C:\YunSDR\python_20260213'
+py -3.11 -m venv .venv-sdk
+& .\.venv-sdk\Scripts\python.exe -m pip install numpy
 ```
 
-输出的解释器路径应以 `.venv-sdk\Scripts\python.exe` 结尾。后续用 `& $py -m pip` 安装包，用 `& $py .\例程.py` 运行脚本，无需激活。若希望在当前 PowerShell 中直接用 `python` 和 `pip`，可运行 `.\.venv-sdk\Scripts\Activate.ps1`。新开 PowerShell 后，在同一工作目录重新设置 `$py` 即可。
+当前目录已有 `.venv-sdk` 时，跳过第二行。后续在同一目录使用相对路径安装依赖和运行脚本，无需激活虚拟环境。
 
 #### 2.3.2 安装并启动 Spyder
 
