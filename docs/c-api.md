@@ -130,6 +130,8 @@ gcc -dumpmachine
 
 ##### 安装 gendef
 
+**直接下载 Windows x64 版。** 将 `gendef.exe` 保存到已加入 `Path` 的 MinGW `bin` 目录，例如 `C:\TDM-GCC-64\bin`。在 PowerShell 运行 `Get-Command gendef.exe` 确认位置后即可继续构建。[下载 gendef.exe](https://github.com/lichen813-gif/libyunsdr-docs/releases/download/gendef-win64-14.0.0-r598/gendef.exe) · [来源、源码和许可证](https://github.com/lichen813-gif/libyunsdr-docs/releases/tag/gendef-win64-14.0.0-r598)
+
 **已安装 MSYS2。** 打开开始菜单中的 **MSYS2 UCRT64**，运行以下命令。[MSYS2 gendef 工具包](https://packages.msys2.org/packages/mingw-w64-ucrt-x86_64-tools?repo=ucrt64)
 
 ```bash
@@ -143,7 +145,7 @@ $env:Path = "$env:Path;C:\msys64\ucrt64\bin"
 Get-Command gendef.exe
 ```
 
-**已有 MinGW，只需补上 gendef。** 在 MSYS2 官方工具包页面点击 **File** 下载 `.pkg.tar.zst` 文件。把 `$pkg` 改成下载文件的完整路径，把 `$mingwBin` 改成已加入 `Path` 的 MinGW `bin` 目录。下面的命令会把 `gendef.exe` 直接解到该目录。[MSYS2 gendef 二进制包](https://packages.msys2.org/packages/mingw-w64-ucrt-x86_64-tools?repo=ucrt64)
+**从 MSYS2 二进制包提取。** 在 MSYS2 官方工具包页面点击 **File** 下载 `.pkg.tar.zst` 文件。把 `$pkg` 改成下载文件的完整路径，把 `$mingwBin` 改成已加入 `Path` 的 MinGW `bin` 目录。下面的命令会把 `gendef.exe` 直接解到该目录。[MSYS2 gendef 二进制包](https://packages.msys2.org/packages/mingw-w64-ucrt-x86_64-tools?repo=ucrt64)
 
 ```powershell
 $pkg = 'C:\Downloads\mingw-w64-ucrt-x86_64-tools-14.0.0.r598.ge3d18511f-1-any.pkg.tar.zst'
