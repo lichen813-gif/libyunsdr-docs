@@ -93,11 +93,12 @@ USB3 版安装完成后，再执行这一行，将 libusb 的 DLL 放在 Python 
 Copy-Item -LiteralPath "$prefix\lib\libusb-1.0.dll" -Destination "$prefix\bin"
 ```
 
-**验证导入。** 在同一终端执行。两个模块的路径应指向本次安装的 `bin`，最后一行应为 `ticks = 15360`。这项检查无需连接板卡。
+**验证导入。** 临时进入本次安装的 `bin` 检查导入。输出应显示该目录下的模块路径和 `ticks = 15360`。这项检查无需连接板卡。
 
 ```powershell
-$env:PYTHONPATH = "$prefix\bin"
-& $py -P -B -c "import yunsdr_ss_api as api, _yunsdr_ss_api as ext; print(api.__file__, ext.__file__, sep='\n'); print('ticks =', api.yunsdr_timeNsToTicks(500000, 30720000.0))"
+Push-Location -LiteralPath "$prefix\bin"
+& $py -E -c "import yunsdr_ss_api as api, _yunsdr_ss_api as ext; print(api.__file__, ext.__file__, sep='\n'); print('ticks =', api.yunsdr_timeNsToTicks(500000, 30720000.0))"
+Pop-Location
 ```
 
 运行例程所需的 NumPy 等依赖按第 2.3 节安装。安装目录的 `bin` 中有 `yunsdr_ss_api.py`、`_yunsdr_ss_api.pyd` 和 `libyunsdr_ss.dll`，USB3 版还应有 `libusb-1.0.dll`。[PowerShell 运行例程](#233-在-powershell-运行-python-例程)
@@ -137,14 +138,12 @@ py -3.11 -m venv .venv-sdk
 
 本节适用于交付包 `libyunsdr-26-01-00.1.zip`。实测环境为 Windows x64、MinGW-w64（TDM-GCC 9.2.0）、CMake 4.2.1、SWIG 4.2.1 和 CPython 3.11.9 x64。MinGW 路线无需安装 Visual Studio。解压源码到无空格的路径，打开普通 Windows PowerShell，进入含 `CMakeLists.txt` 的源码根目录。[MinGW-w64、CMake 和 gendef 安装步骤](c-api.md#234-使用-mingw-w64-构建-c-库) · [CPython 3.11.9](https://www.python.org/downloads/release/python-3119/) · [SWIG Windows 预编译包](https://sourceforge.net/projects/swig/files/swigwin/swigwin-4.2.1/swigwin-4.2.1.zip/download)
 
-把第一行 `Set-Location` 引号里的路径改为实际的源码根目录。第二行按实际安装位置修改工具目录，已经在 `Path` 中的目录可省去。`gcc -dumpmachine` 应输出 `x86_64-w64-mingw32`。SWIG 应来自完整解压的 `swigwin-4.2.1` 目录。
+把第一行 `Set-Location` 引号里的路径改为实际的源码根目录。在新的 PowerShell 中运行以下命令检查工具。`gcc -dumpmachine` 应输出 `x86_64-w64-mingw32`，SWIG 应来自完整解压的 `swigwin-4.2.1` 目录。只有找不到工具时，才把实际所在目录加入 `Path`。缺少 `gendef.exe` 时，按 C 手册安装。[安装 gendef](c-api.md#安装-gendef)
 
 ```powershell
 Set-Location -LiteralPath 'C:\YunSDR\libyunsdr-26-01-00.1'
-$env:Path = "C:\TDM-GCC-64\bin;C:\YunSDR\tools\ucrt64\bin;C:\YunSDR\tools\swigwin-4.2.1;$env:Path"
 Get-Command gcc.exe, g++.exe, mingw32-make.exe, gendef.exe, cmake.exe, swig.exe
 gcc -dumpmachine
-cmake --version
 swig -version
 py -3.11 --version
 ```
@@ -595,7 +594,7 @@ print(offset_hz, amplitude_dbfs, phase_deg)
 
 | 现象 | 排查方法 |
 | --- | --- |
-| `No module named 'yunsdr_ss_api'` | 检查 `PYTHONPATH` 和解释器。包装文件 `yunsdr_ss_api.py` 应与生成的扩展一同存在 |
+| `No module named 'yunsdr_ss_api'` | 检查是否使用例程虚拟环境。确认 `yunsdr_ss_api.py` 和生成的扩展在脚本目录中，或在当前 `PYTHONPATH` 指定的 SDK 目录中 |
 | Windows `DLL load failed` 或 Linux `cannot open shared object file` | 检查 Python 版本和位数、生成扩展的路径与同版 `libyunsdr_ss`。USB3 检查 libusb 动态库。Linux 在测试终端用 `ldd` 核对 |
 | Spyder 中的解释器或 SDK 路径与终端不同 | Windows 使用脚本目录的 `.venv-sdk`，Linux 使用 `venv311`。联机脚本还需核对同目录的 SDK 文件，Linux 需设置 `LD_LIBRARY_PATH`。用 `sys.executable` 和 `api.__file__` 检查实际路径，调整解释器后重启内核 |
 | Linux 的 Spyder 图窗打不开 | 检查当前会话是否有图形桌面，再核对 Qt 图形后端选择。若启动终端提示 Qt 平台插件加载失败，按报错检查发行版的系统图形依赖 |

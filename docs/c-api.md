@@ -59,26 +59,24 @@ Windows ARM64、32 位主机和 macOS 的构建组合待确认。
 
 #### 2.3.2 配置、编译和安装
 
-在源码根目录依次运行以下命令。`build-win64` 保存构建和配置缓存，`sdk-win64` 是安装目录。
+把第一行路径改为含 `CMakeLists.txt` 的源码根目录。Windows 下该路径不应包含空格。配置成功后再编译和安装。`build-win64` 保存构建产物，`sdk-win64` 是安装目录。
 
 ```powershell
-$prefix = Join-Path (Get-Location).Path "sdk-win64"
+Set-Location -LiteralPath 'C:\YunSDR\libyunsdr-26-01-00.1'
+$prefix = "$PWD\sdk-win64"
 cmake -S . -B build-win64 -G "Visual Studio 16 2019" -A x64 `
   "-DCMAKE_INSTALL_PREFIX=$prefix" -DENABLE_EXAMPLE=ON `
   -DENABLE_PCIEX=ON -DENABLE_PCIES=ON -DENABLE_PCIE=OFF -DENABLE_SFP=OFF `
   -DENABLE_USB3=OFF -DENABLE_COMLABS=OFF
-Select-String -Path .\build-win64\CMakeCache.txt -Pattern '^ENABLE_|^LIBPCIES_LIBRARIES:'
 cmake --build build-win64 --config Release --parallel 4
 cmake --install build-win64 --config Release
 ```
 
-配置结果应显示 VS2019 x64，`LIBPCIES_LIBRARIES` 应指向包内的 Windows x64 `libpcies.lib`。构建产物位于 `build-win64\lib\Release`、`build-win64\tests\Release` 和 `build-win64\example\Release`。安装后执行以下检查。
+配置日志中的 `LIBPCIES_LIBRARIES` 应指向包内的 Windows x64 `libpcies.lib`。安装后在源码根目录执行以下命令。运行测试所需的 DLL 已与程序放在同一目录。
 
 ```powershell
-Get-ChildItem "$prefix\include", "$prefix\bin", "$prefix\lib"
-Select-String -Path "$prefix\include\version.h" -Pattern '^#define YUNSDR_VERSION_STRING'
-$env:PATH = "$prefix\bin;$env:PATH"
-& "$prefix\tests\yunsdr_ss\yunsdr_ss_txrx_multiport.exe" -h
+Select-String -Path .\sdk-win64\include\version.h -Pattern '^#define YUNSDR_VERSION_STRING'
+.\sdk-win64\tests\yunsdr_ss\yunsdr_ss_txrx_multiport.exe -h
 ```
 
 | 安装位置 | 产物及作用 |
@@ -86,7 +84,7 @@ $env:PATH = "$prefix\bin;$env:PATH"
 | `include\` | `yunsdr_api_ss.h` 用于编译应用，`version.h` 用于核对 SDK 版本 |
 | `lib\` | `yunsdr_ss.lib` 为 MSVC 导入库，`libyunsdr_ss.lib` 为静态归档。此目录还安装一份 `libyunsdr_ss.dll`，启用 USB3 时另有 libusb 的导入库和 DLL |
 | `bin\` | `libyunsdr_ss.dll`。将该目录加入当前会话 `PATH`，或随应用部署同一版 DLL |
-| `tests\yunsdr_ss\`、`example\yunsdr_ss\` | 测试程序和启用的例程，启动命令见第 4 节 |
+| `tests\yunsdr_ss\`、`example\yunsdr_ss\` | 测试程序、扩展示例及运行所需的 DLL。启动命令见第 4 节 |
 
 **使用 CMake GUI 和 Visual Studio**
 
@@ -97,25 +95,21 @@ $env:PATH = "$prefix\bin;$env:PATH"
 
 #### 2.3.3 加入 USB3 支持
 
-解压 libusb 的 Windows x64 包。以已验证的 libusb 1.0.29 为例，头文件在 `include\libusb.h`，VS2019 x64 的导入库和 DLL 在 `VS2019\MS64\dll`。由于本包 CMake 的自动搜索路径未涵盖这一级 `VS2019` 子目录，配置时显式指定头文件和导入库。本包对能识别版本的 Windows libusb 要求至少 1.0.23。[libusb 官方发布包](https://github.com/libusb/libusb/releases/tag/v1.0.29)
+在 SDK 源码根目录运行。把第一行的 `$usb` 路径改为 libusb 1.0.29 的实际解压目录。此配置同时启用 PCIEX、PCIES 和 USB3。构建时显式指定头文件和 VS2019 x64 导入库。本包对能识别版本的 Windows libusb 要求至少 1.0.23。[libusb 官方发布包](https://github.com/libusb/libusb/releases/tag/v1.0.29)
 
 ```powershell
 $usb = "C:\YunSDR\deps\libusb-1.0.29"
-$usbDllDir = Join-Path $usb "VS2019\MS64\dll"
-$usbPrefix = Join-Path (Get-Location).Path "sdk-win64-usb"
 cmake -S . -B build-win64-usb -G "Visual Studio 16 2019" -A x64 `
-  "-DCMAKE_INSTALL_PREFIX=$usbPrefix" "-DLIBUSB_HEADER_FILE=$usb\include\libusb.h" `
-  "-Dusb_LIBRARY=$usbDllDir\libusb-1.0.lib" `
+  "-DCMAKE_INSTALL_PREFIX=$PWD\sdk-win64-usb" "-DLIBUSB_HEADER_FILE=$usb\include\libusb.h" `
+  "-Dusb_LIBRARY=$usb\VS2019\MS64\dll\libusb-1.0.lib" `
   -DENABLE_USB3=ON -DENABLE_PCIEX=ON -DENABLE_PCIES=ON `
   -DENABLE_PCIE=OFF -DENABLE_SFP=OFF -DENABLE_EXAMPLE=ON -DENABLE_COMLABS=OFF
 cmake --build build-win64-usb --config Release --parallel 4
 cmake --install build-win64-usb --config Release
-Get-Item "$usbPrefix\lib\libusb-1.0.dll"
-$env:PATH = "$usbPrefix\bin;$usbPrefix\lib;$env:PATH"
-& "$usbPrefix\tests\yunsdr_ss\yunsdr_ss_rate.exe" -h
+.\sdk-win64-usb\tests\yunsdr_ss\yunsdr_ss_rate.exe -h
 ```
 
-将 `$usb` 替换为实际解压目录。配置阶段核对 `LIBUSB_HEADER_FILE`、`usb_LIBRARY` 和 libusb 版本提示。只构建 USB3 时，在独立构建目录同时设 `-DENABLE_PCIEX=OFF -DENABLE_PCIES=OFF -DENABLE_FIRMWARE=OFF`。本包的固件更新入口依赖 PCIES 提供的链接符号，关闭 PCIES 而保留固件更新会导致链接失败。联机使用 `usb3:0` 和设备允许的采样率、频率及块长。本包 USB3 的普通收发通过多路 API，即使只选一个通道。
+只构建 USB3 时，使用独立的构建和安装目录，并设 `-DENABLE_PCIEX=OFF -DENABLE_PCIES=OFF -DENABLE_FIRMWARE=OFF`。本包的固件更新入口依赖 PCIES 提供的链接符号。联机使用 `usb3:0`，普通收发使用多路 API，单通道也用同一接口。
 
 使用 CMake GUI 时，先新建 `build-win64-usb`，设置独立的 `CMAKE_INSTALL_PREFIX` 并勾选 `ENABLE_USB3`。在 **Advanced** 中把 `LIBUSB_HEADER_FILE` 指向 `include\libusb.h`，把 `usb_LIBRARY` 指向 `VS2019\MS64\dll\libusb-1.0.lib`。若字段尚未显示，用 **Add Entry** 以 `FILEPATH` 类型添加。再次 **Configure** 后确认已识别 libusb 版本，然后 **Generate**，按 2.3.2 构建和安装。
 
@@ -123,55 +117,87 @@ $env:PATH = "$usbPrefix\bin;$usbPrefix\lib;$env:PATH"
 
 此路线无需 Visual Studio。实测环境为 Windows x64、TDM-GCC 9.2.0（`x86_64-w64-mingw32`）、CMake 4.2.1 和 `gendef`。交付包的 PCIEX、USB3、PCIEX + USB3 三种 Release 配置均通过构建、安装和 C 客户端动态链接验证。[兼容矩阵](compatibility.md)
 
-**准备工具。** 安装 MinGW-w64 x64 工具链和 Windows CMake。工具链需包含 `gcc.exe`、`g++.exe` 和 `mingw32-make.exe`。若工具链未提供 `gendef.exe`，可下载 MSYS2 的 `mingw-w64-ucrt-x86_64-tools` 二进制包，用 Windows `tar -xf <下载的包路径> -C <解压目录> ucrt64/bin/gendef.exe` 解出该工具。SDK 的构建规则在 DLL 链接后用它生成导出定义文件。[TDM-GCC 9.2.0 x64 安装程序](https://github.com/jmeubank/tdm-gcc/releases/download/v9.2.0-tdm64-1/tdm64-gcc-9.2.0.exe) · [MSYS2 gendef 工具包](https://packages.msys2.org/packages/mingw-w64-ucrt-x86_64-tools?repo=ucrt64) · [CMake 下载](https://cmake.org/download/)
+**准备工具。** 安装 MinGW-w64 x64 工具链和 Windows CMake。工具链需包含 `gcc.exe`、`g++.exe` 和 `mingw32-make.exe`。当前交付源码用 MinGW 构建 DLL 时，需要 `gendef.exe` 生成 `libyunsdr_ss.def`。这个工具可以单独解压使用。MSVC 构建和运行预编译包均无需 `gendef`。[TDM-GCC 9.2.0 x64 安装程序](https://github.com/jmeubank/tdm-gcc/releases/download/v9.2.0-tdm64-1/tdm64-gcc-9.2.0.exe) · [CMake 下载](https://cmake.org/download/)
 
-打开普通 Windows PowerShell，将下列工具路径改成实际位置。已在 `Path` 中的目录可以省去。`gcc -dumpmachine` 应输出 `x86_64-w64-mingw32`。本节的 `MinGW Makefiles` 生成器用 Windows 的 `cmd.exe` 执行构建规则，请在 PowerShell 中运行以下命令。[CMake 生成器说明](https://cmake.org/cmake/help/latest/generator/MinGW%20Makefiles.html)
+打开新的普通 PowerShell，确认构建工具可以找到。`gcc -dumpmachine` 应输出 `x86_64-w64-mingw32`。本节使用 `MinGW Makefiles` 生成器。[CMake 生成器说明](https://cmake.org/cmake/help/latest/generator/MinGW%20Makefiles.html)
 
 ```powershell
-$env:Path = "C:\TDM-GCC-64\bin;C:\YunSDR\tools\ucrt64\bin;$env:Path"
 Get-Command gcc.exe, g++.exe, mingw32-make.exe, gendef.exe, cmake.exe
 gcc -dumpmachine
-gcc --version
-cmake --version
 ```
 
-**配置、编译和安装。** 将交付 ZIP 解压到无空格的路径，在包含 `CMakeLists.txt` 的源码根目录运行。将 `$profile` 设为 `pciex`、`usb3` 或 `pciex-usb3`。启用 USB3 时，下载并解压 `libusb-1.0.29.7z`，将 `$usb` 改成实际目录。实测直接链接的是 `VS2019\MS64\dll\libusb-1.0.dll`，并由安装步骤把该 DLL 复制到 SDK 的 `lib\` 目录。此步骤只用该目录中的预编译 DLL。[libusb Windows 二进制包](https://github.com/libusb/libusb/releases/download/v1.0.29/libusb-1.0.29.7z)
+如果工具已加到 Windows 的 `Path`，重新打开 PowerShell 即可。若只有 `gendef.exe` 缺失，按下面任选一种方法准备。其他构建工具找不到时，把相应工具所在的实际目录加入 `Path`。
+
+##### 安装 gendef
+
+**已安装 MSYS2。** 打开开始菜单中的 **MSYS2 UCRT64**，运行以下命令。[MSYS2 gendef 工具包](https://packages.msys2.org/packages/mingw-w64-ucrt-x86_64-tools?repo=ucrt64)
+
+```bash
+pacman -S --needed mingw-w64-ucrt-x86_64-tools
+```
+
+回到普通 PowerShell。若这里找不到 `gendef.exe`，把下行的 `C:\msys64` 改成 MSYS2 的实际安装位置。追加目录可以保留当前编译器的搜索顺序。
 
 ```powershell
-$ErrorActionPreference = 'Stop'
-$profile = 'pciex' # pciex, usb3, or pciex-usb3
-if ($profile -notin @('pciex', 'usb3', 'pciex-usb3')) { throw 'Invalid backend profile.' }
-$pciex = if ($profile -eq 'usb3') { 'OFF' } else { 'ON' }
-$usbArgs = @('-DENABLE_USB3=OFF')
-if ($profile -ne 'pciex') {
-    $usb = 'C:\YunSDR\deps\libusb-1.0.29'
-    $usbHeader = (Resolve-Path -LiteralPath "$usb\include\libusb.h").Path
-    $usbDll = (Resolve-Path -LiteralPath "$usb\VS2019\MS64\dll\libusb-1.0.dll").Path
-    $usbArgs = @('-DENABLE_USB3=ON', "-DLIBUSB_HEADER_FILE=$usbHeader", "-Dusb_LIBRARY=$usbDll")
-}
+$env:Path = "$env:Path;C:\msys64\ucrt64\bin"
+Get-Command gendef.exe
+```
 
+**已有 MinGW，只需补上 gendef。** 在 MSYS2 官方工具包页面点击 **File** 下载 `.pkg.tar.zst` 文件。把 `$pkg` 改成下载文件的完整路径，把 `$mingwBin` 改成已加入 `Path` 的 MinGW `bin` 目录。下面的命令会把 `gendef.exe` 直接解到该目录。[MSYS2 gendef 二进制包](https://packages.msys2.org/packages/mingw-w64-ucrt-x86_64-tools?repo=ucrt64)
+
+```powershell
+$pkg = 'C:\Downloads\mingw-w64-ucrt-x86_64-tools-14.0.0.r598.ge3d18511f-1-any.pkg.tar.zst'
+$mingwBin = 'C:\TDM-GCC-64\bin'
+tar.exe -xf $pkg -C $mingwBin --strip-components=2 ucrt64/bin/gendef.exe
+Get-Command gendef.exe
+```
+
+`Get-Command` 应显示 MinGW `bin` 下的 `gendef.exe`。该目录已经在 `Path` 时，可以直接继续构建。如果 MinGW `bin` 不可写，也可解到其他可写目录，再将该目录加入 `Path`。若当前窗口的 `tar.exe` 无法解压 `.zst`，可使用上面的 MSYS2 安装方式。
+
+##### 构建并验证 C 库
+
+**选择后端。** 把 `Set-Location` 引号里的路径改成实际源码根目录，路径不应包含空格。
+
+```powershell
+Set-Location -LiteralPath 'C:\YunSDR\libyunsdr-26-01-00.1'
+```
+
+只构建 PCIEX 时执行这一组。
+
+```powershell
+$profile = 'pciex'
+$backendArgs = @('-DENABLE_PCIEX=ON', '-DENABLE_USB3=OFF')
+```
+
+要启用 USB3，改用下面这一组。把 `$usb` 改为 libusb 1.0.29 的实际解压目录。要同时启用 PCIEX 和 USB3，把 `$profile` 改为 `'pciex-usb3'`，把 `$pciex` 改为 `'ON'`。[libusb Windows 二进制包](https://github.com/libusb/libusb/releases/download/v1.0.29/libusb-1.0.29.7z)
+
+```powershell
+$profile = 'usb3'
+$pciex = 'OFF'
+$usb = 'C:\YunSDR\deps\libusb-1.0.29'
+$backendArgs = @("-DENABLE_PCIEX=$pciex", '-DENABLE_USB3=ON',
+    "-DLIBUSB_HEADER_FILE=$usb\include\libusb.h",
+    "-Dusb_LIBRARY=$usb\VS2019\MS64\dll\libusb-1.0.dll")
+```
+
+**配置、编译和安装。** 选好后端后运行以下命令。每种配置使用各自的构建和安装目录。
+
+```powershell
 $buildDir = "build-win64-mingw-$profile"
-$prefix = Join-Path (Get-Location).Path "sdk-win64-mingw-$profile"
+$prefix = "$PWD\sdk-win64-mingw-$profile"
 cmake -S . -B $buildDir -G 'MinGW Makefiles' -DCMAKE_BUILD_TYPE=Release `
-  "-DCMAKE_INSTALL_PREFIX=$prefix" "-DENABLE_PCIEX=$pciex" -DENABLE_PCIES=OFF `
-  -DENABLE_FIRMWARE=OFF -DENABLE_PCIE=OFF -DENABLE_SFP=OFF `
-  -DENABLE_EXAMPLE=OFF -DENABLE_COMLABS=OFF -DENABLE_PYTHON=OFF @usbArgs
-if ($LASTEXITCODE -ne 0) { throw 'CMake configuration failed.' }
+  "-DCMAKE_INSTALL_PREFIX=$prefix" -DENABLE_PCIES=OFF -DENABLE_FIRMWARE=OFF `
+  -DENABLE_PCIE=OFF -DENABLE_SFP=OFF -DENABLE_EXAMPLE=OFF `
+  -DENABLE_COMLABS=OFF -DENABLE_PYTHON=OFF @backendArgs
 cmake --build $buildDir --parallel 4
-if ($LASTEXITCODE -ne 0) { throw 'Release build failed.' }
 cmake --install $buildDir
-if ($LASTEXITCODE -ne 0) { throw 'Installation failed.' }
-Get-ChildItem -LiteralPath "$prefix\include", "$prefix\lib"
 ```
 
 安装目录的 `include\` 下有公共头文件。`lib\` 下的 `libyunsdr_ss.dll.a` 是 GNU 导入库，`libyunsdr_ss.a` 是静态库，`libyunsdr_ss.def` 是导出定义文件。运行时使用同一次构建的 `libyunsdr_ss.dll`，USB3 版还需同目录的 `libusb-1.0.dll`。
 
-**验证 DLL 加载和 C API 调用。** 在同一 PowerShell 运行以下命令。程序读取时间换算结果，无需连接板卡。成功时输出 `ticks = 15360`。
+**验证 DLL 加载和 C API 调用。** 在源码根目录将以下代码保存为 `verify_c_api.c`。程序检查时间换算结果，无需连接板卡。
 
-```powershell
-$source = Join-Path $buildDir 'verify_c_api.c'
-$exe = Join-Path $buildDir 'verify_c_api.exe'
-@'
+```c
 #include <stdio.h>
 #include "yunsdr_api_ss.h"
 
@@ -183,13 +209,13 @@ int main(void)
     puts("ticks = 15360");
     return 0;
 }
-'@ | Set-Content -LiteralPath $source -Encoding ASCII
+```
 
-gcc $source "-I$prefix\include" "$prefix\lib\libyunsdr_ss.dll.a" -o $exe
-if ($LASTEXITCODE -ne 0) { throw 'C test program link failed.' }
-$env:Path = "$prefix\lib;$env:Path"
-& ".\$exe"
-if ($LASTEXITCODE -ne 0) { throw 'C API test failed.' }
+编译到已包含对应 DLL 的测试目录。运行成功时应输出 `ticks = 15360`。
+
+```powershell
+gcc .\verify_c_api.c "-I$prefix\include" "$prefix\lib\libyunsdr_ss.dll.a" -o "$prefix\tests\yunsdr_ss\verify_c_api.exe"
+& "$prefix\tests\yunsdr_ss\verify_c_api.exe"
 ```
 
 **PCIES 和固件更新。** 本交付包在 MinGW 下会自动选中 Linux 的 `libpcies.a` 和 `libfirmware.a`。显式指定随包的 Windows `.lib` 后，链接仍缺少 `__security_check_cookie` 等 MSVC 运行库符号。使用这些功能时按第 2.3.2 或 2.3.3 节用 MSVC 构建。板卡联机收发尚待验证。PCIEX 和 USB3 的 Python 绑定构建及导入步骤见 [MinGW-w64 和 SWIG 构建 Python 绑定](python-guide.md#214-使用-mingw-w64-和-swig-构建-python-绑定)。
@@ -237,40 +263,39 @@ test -f CMakeLists.txt
 
 #### 2.4.2 配置、编译和安装
 
-以下为 PCIEX/PCIES 配置。需要 USB3 时使用后面的独立配置命令。在仅构建 USB3 的配置中同时关闭 `ENABLE_PCIEX`、`ENABLE_PCIES` 和 `ENABLE_FIRMWARE`。Linux 步骤按交付包 CMake 核对，实机结果待验证。
+以下为 PCIEX/PCIES 配置。把第一行的 `cd` 路径改成实际的源码根目录。需要 USB3 时使用后面的独立配置。在仅构建 USB3 的配置中同时关闭 `ENABLE_PCIEX`、`ENABLE_PCIES` 和 `ENABLE_FIRMWARE`。Linux 步骤按交付包 CMake 核对，实机结果待验证。
 
 ```bash
+cd "$HOME/libyunsdr-26-01-00.1"
 cmake -S . -B build-linux -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX=/usr/local -DENABLE_EXAMPLE=ON \
   -DENABLE_PCIEX=ON -DENABLE_PCIES=ON -DENABLE_PCIE=OFF -DENABLE_SFP=OFF \
   -DENABLE_USB3=OFF -DENABLE_COMLABS=OFF
-cmake -LA -N build-linux | grep -E '^ENABLE_|^LIBPCIES_LIBRARIES:'
 cmake --build build-linux --parallel 4
-file build-linux/lib/libyunsdr_ss.so
+```
+
+运行随包例程时，直接进入第 4.1 节的构建目录。需要向系统安装 C 库和头文件时，在源码根目录执行以下命令。[基础测试命令](#41-从哪里运行)
+
+```bash
 sudo cmake --install build-linux
 sudo ldconfig
 grep YUNSDR_VERSION_STRING /usr/local/include/version.h
-LD_LIBRARY_PATH="$PWD/build-linux/lib" ldd build-linux/tests/yunsdr_ss_txrx_multiport
-LD_LIBRARY_PATH="$PWD/build-linux/lib" ./build-linux/tests/yunsdr_ss_txrx_multiport -h
 ```
 
-启用 PCIES 时确认 `LIBPCIES_LIBRARIES` 来自与主机匹配的架构目录。`file` 应显示目标架构，`ldd` 的依赖列表应无 `not found`。
+启用 PCIES 时，配置日志应显示与主机架构匹配的 `libpcies`。排查加载问题时，用 `file build-linux/lib/libyunsdr_ss.so` 核对架构，再在测试目录用 `ldd ./yunsdr_ss_txrx_multiport` 检查依赖。
 
 **Linux USB3 构建。** 在源码根目录运行。用于同一主机的 PCIEX/PCIES 也保留为开启状态。
 
 ```bash
 sudo apt install libusb-1.0-0-dev
-pkg-config --modversion libusb-1.0
 cmake -S . -B build-linux-usb -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX=/usr/local -DENABLE_EXAMPLE=ON \
   -DENABLE_PCIEX=ON -DENABLE_PCIES=ON -DENABLE_PCIE=OFF -DENABLE_SFP=OFF \
   -DENABLE_USB3=ON -DENABLE_COMLABS=OFF
 cmake --build build-linux-usb --parallel 4
-LD_LIBRARY_PATH="$PWD/build-linux-usb/lib" ldd build-linux-usb/tests/yunsdr_ss_rate
-LD_LIBRARY_PATH="$PWD/build-linux-usb/lib" ./build-linux-usb/tests/yunsdr_ss_rate -h
 ```
 
-检查 `ldd` 是否解析到该构建的 `libyunsdr_ss.so` 和系统的 `libusb-1.0.so`。若要将 USB3 版提供给系统内其他应用，运行 `sudo cmake --install build-linux-usb` 和 `sudo ldconfig`。此安装会覆盖相同路径的核心 SDK 文件。
+将第 4.1 节的 Linux 测试目录换成 `build-linux-usb/tests/` 所在的完整路径。若要向系统安装 USB3 版，运行 `sudo cmake --install build-linux-usb` 和 `sudo ldconfig`。此安装会覆盖相同路径的核心 SDK 文件。
 
 本包在 Linux 将核心库和头文件分别安装到固定的 `/usr/local/lib` 和 `/usr/local/include`，上例也将 pkg-config 文件放到 `/usr/local/lib/pkgconfig`。测试和示例可执行文件留在 `build-linux/tests/` 和 `build-linux/example/`。若需保留多个版本，可在构建目录分别链接，并使用 `LD_LIBRARY_PATH` 指定对应构建的 `lib/`。系统安装会写入相同的核心库路径。[CMake 3.16 命令参考](https://cmake.org/cmake/help/v3.16/manual/cmake.1.html#install-a-project)
 
@@ -346,11 +371,12 @@ done:
 }
 ```
 
-Windows 在 VS x64 开发者 PowerShell 中编译，`$prefix` 指向第 2.3 节的安装目录。以下例子使用 `pciex:0`，按板卡实际传输方式更换。
+Windows 在 VS x64 开发者 PowerShell 中进入 `iq_rx.c` 所在目录。把第一行的 `$prefix` 改为第 2.3 节的实际 MSVC 安装目录。用 USB3 版时，也把安装目录 `lib\` 中的 `libusb-1.0.dll` 复制到程序旁。以下示例使用 `pciex:0`，按板卡实际传输方式更换。
 
 ```powershell
+$prefix = 'C:\YunSDR\libyunsdr-26-01-00.1\sdk-win64'
 cl /nologo /W4 /TC /D_CRT_SECURE_NO_WARNINGS /I"$prefix\include" iq_rx.c /link /LIBPATH:"$prefix\lib" yunsdr_ss.lib
-$env:PATH = "$prefix\bin;$env:PATH"
+Copy-Item -LiteralPath "$prefix\bin\libyunsdr_ss.dll" -Destination .
 .\iq_rx.exe "pciex:0"
 (Get-Item .\rx_ch1.iq16).Length
 ```
@@ -370,37 +396,31 @@ wc -c < rx_ch1.iq16
 
 ### 4.1 从哪里运行
 
-先打开 PowerShell 或 Bash，进入含 `CMakeLists.txt` 的 SDK 源码根目录，运行本系统的准备命令。变量使用绝对路径。随后可在同一终端切到测试工作目录，`.dat` 文件写入程序启动时的当前目录。帮助输出可用于检查动态库是否能加载，部分程序显示帮助后返回非零退出码。
+打开 PowerShell 或 Bash，进入所用版本的测试目录，再用相对路径运行程序。只需把第一行的目录改成实际位置。`.dat` 文件写入启动程序时的当前目录。安装后的 Windows 例程已带配套 DLL。Linux 从相邻的 `lib/` 目录加载本次构建的共享库。
 
 | 产物 | Windows x64 | Linux |
 | --- | --- | --- |
 | 三项基础测试 | `sdk-win64\tests\yunsdr_ss\*.exe`，安装前位于 `build-win64\tests\Release\` | `build-linux/tests/` |
+| MinGW-w64 基础测试 | `sdk-win64-mingw-<配置>\tests\yunsdr_ss\` | — |
 | 扩展示例 | `sdk-win64\example\yunsdr_ss\*.exe`，安装前位于 `build-win64\example\Release\` | `build-linux/example/` |
 | USB3 版基础测试 | `sdk-win64-usb\tests\yunsdr_ss\` | `build-linux-usb/tests/` |
 | FM 音频和视频 | `sdk-win64-comlabs\tests\yunsdr_ss\` | `build-linux-comlabs/tests/` |
 
-表中使用第 2 节和 4.4.1 的默认目录。Linux 的系统安装写入头文件、库和 pkg-config 文件，可执行例程从上表的构建目录启动。
+先运行 `-h` 检查程序能否加载。部分程序显示帮助后返回非零退出码。Linux 例程从上表的构建目录启动。
 
 ```powershell
-$sdkRoot = (Get-Location).Path
-$prefix = Join-Path $sdkRoot "sdk-win64"
-$testDir = Join-Path $prefix "tests\yunsdr_ss"
-$exampleDir = Join-Path $prefix "example\yunsdr_ss"
-$env:PATH = "$prefix\bin;$prefix\lib;$env:PATH"
-& "$testDir\yunsdr_ss_rate.exe" -h
-& "$testDir\yunsdr_ss_txrx_multiport.exe" -h
-& "$testDir\yunsdr_ss_trx_multiport_zerocopy.exe" -h
+Set-Location -LiteralPath 'C:\YunSDR\libyunsdr-26-01-00.1\sdk-win64\tests\yunsdr_ss'
+.\yunsdr_ss_rate.exe -h
+.\yunsdr_ss_txrx_multiport.exe -h
+.\yunsdr_ss_trx_multiport_zerocopy.exe -h
 ```
 
 ```bash
-sdk_root="$PWD"
-build_dir="$sdk_root/build-linux"
-test_dir="$build_dir/tests"
-example_dir="$build_dir/example"
-export LD_LIBRARY_PATH="$build_dir/lib"
-"$test_dir/yunsdr_ss_rate" -h
-"$test_dir/yunsdr_ss_txrx_multiport" -h
-"$test_dir/yunsdr_ss_trx_multiport_zerocopy" -h
+cd "$HOME/libyunsdr-26-01-00.1/build-linux/tests"
+export LD_LIBRARY_PATH="$PWD/../lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+./yunsdr_ss_rate -h
+./yunsdr_ss_txrx_multiport -h
+./yunsdr_ss_trx_multiport_zerocopy -h
 ```
 
 完成准备后，按主机系统选择下面的联机命令。示例中的频率、采样率、块长和增益须与实际机型和输入信号匹配。执行带 TX 的测试前，按板卡规定接好有线回环和衰减器。Windows 的零拷贝程序要在交互式终端直接运行，管道或重定向可能导致程序在解析参数前退出。
@@ -428,33 +448,29 @@ export LD_LIBRARY_PATH="$build_dir/lib"
 Windows PowerShell
 
 ```powershell
-& "$testDir\yunsdr_ss_rate.exe" -a 'pciex:0' -f 2400000000 -s 30720000 -g 5 -c 0x1 -C 0x0 -N 30720 -r 1 -n 3
+.\yunsdr_ss_rate.exe -a 'pciex:0' -f 2400000000 -s 30720000 -g 5 -c 0x1 -C 0x0 -N 30720 -r 1 -n 3
 ```
 
 Linux Bash
 
 ```bash
-"$test_dir/yunsdr_ss_rate" -a 'pciex:0' -f 2400000000 -s 30720000 -g 5 -c 0x1 -C 0x0 -N 30720 -r 1 -n 3
+./yunsdr_ss_rate -a 'pciex:0' -f 2400000000 -s 30720000 -g 5 -c 0x1 -C 0x0 -N 30720 -r 1 -n 3
 ```
 
 **USB3 单通道接收测试**
 
-先按 2.3.3 或 2.4.2 构建 USB3 版。下例请求 10 MS/s 和每次 30720 个复数样点，按 USB3 设备支持的频率、采样率和块长调整。这项测试使用 `usb3:0` 的普通多路 I/Q 接口，掩码 `0x1` 只启用本地第 1 路。
+先构建 USB3 版。在第 4.1 节的准备命令中，把测试目录换成 USB3 版的实际目录，再运行本例。按设备支持范围调整频率、采样率和块长。掩码 `0x1` 选本地第 1 路。
 
 Windows PowerShell
 
 ```powershell
-$usbPrefix = Join-Path $sdkRoot "sdk-win64-usb"
-$env:PATH = "$usbPrefix\bin;$usbPrefix\lib;$env:PATH"
-& "$usbPrefix\tests\yunsdr_ss\yunsdr_ss_rate.exe" -a 'usb3:0' -f 2400000000 -s 10000000 -g 5 -c 0x1 -C 0x0 -N 30720 -r 1 -n 3
+.\yunsdr_ss_rate.exe -a 'usb3:0' -f 2400000000 -s 10000000 -g 5 -c 0x1 -C 0x0 -N 30720 -r 1 -n 3
 ```
 
 Linux Bash
 
 ```bash
-usb_build="$sdk_root/build-linux-usb"
-LD_LIBRARY_PATH="$usb_build/lib" "$usb_build/tests/yunsdr_ss_rate" \
-  -a 'usb3:0' -f 2400000000 -s 10000000 -g 5 -c 0x1 -C 0x0 -N 30720 -r 1 -n 3
+./yunsdr_ss_rate -a 'usb3:0' -f 2400000000 -s 10000000 -g 5 -c 0x1 -C 0x0 -N 30720 -r 1 -n 3
 ```
 
 **`yunsdr_ss_txrx_multiport` 的多通道有限帧收发**
@@ -464,14 +480,14 @@ LD_LIBRARY_PATH="$usb_build/lib" "$usb_build/tests/yunsdr_ss_rate" \
 Windows PowerShell
 
 ```powershell
-& "$testDir\yunsdr_ss_txrx_multiport.exe" -a 'pciex:0' -f 2400000000 -s 30720000 -g 5 -G 70 -c 0x3 -C 0x3 -N 30720
+.\yunsdr_ss_txrx_multiport.exe -a 'pciex:0' -f 2400000000 -s 30720000 -g 5 -G 70 -c 0x3 -C 0x3 -N 30720
 Get-Item -LiteralPath .\rx_iq_samples_ch0.dat, .\rx_iq_samples_ch1.dat | Select-Object Name, Length
 ```
 
 Linux Bash
 
 ```bash
-"$test_dir/yunsdr_ss_txrx_multiport" -a 'pciex:0' -f 2400000000 -s 30720000 -g 5 -G 70 -c 0x3 -C 0x3 -N 30720
+./yunsdr_ss_txrx_multiport -a 'pciex:0' -f 2400000000 -s 30720000 -g 5 -G 70 -c 0x3 -C 0x3 -N 30720
 wc -c rx_iq_samples_ch0.dat rx_iq_samples_ch1.dat
 ```
 
@@ -484,14 +500,14 @@ wc -c rx_iq_samples_ch0.dat rx_iq_samples_ch1.dat
 Windows PowerShell
 
 ```powershell
-& "$testDir\yunsdr_ss_trx_multiport_zerocopy.exe" -a 'pciex:0,nsamples_recv_frame:7680' `
+.\yunsdr_ss_trx_multiport_zerocopy.exe -a 'pciex:0,nsamples_recv_frame:7680' `
   -f 500000000 -s 30720000 -g 6 -G 65 -c 1 -N 30720 -m 7680
 ```
 
 Linux Bash
 
 ```bash
-"$test_dir/yunsdr_ss_trx_multiport_zerocopy" -a 'pciex:0,nsamples_recv_frame:7680' \
+./yunsdr_ss_trx_multiport_zerocopy -a 'pciex:0,nsamples_recv_frame:7680' \
   -f 500000000 -s 30720000 -g 6 -G 65 -c 1 -N 30720 -m 7680
 ```
 
@@ -503,18 +519,18 @@ Linux Bash
    Windows PowerShell
 
    ```powershell
-   & "$testDir\yunsdr_ss_txrx_multiport.exe" -a 'pcies:0.0;pcies:0.1' `
+   .\yunsdr_ss_txrx_multiport.exe -a 'pcies:0.0;pcies:0.1' `
      -f 2400000000 -s 122880000 -g 5 -G 70 -c 0x3 -C 0x3 -N 122880
-   & "$testDir\yunsdr_ss_rate.exe" -a 'pcies:0.0;pcies:0.1' `
+   .\yunsdr_ss_rate.exe -a 'pcies:0.0;pcies:0.1' `
      -f 2400000000 -s 122880000 -g 5 -G 70 -c 0x3 -C 0x3 -N 122880 -r 2 -n 3
    ```
 
    Linux Bash
 
    ```bash
-   "$test_dir/yunsdr_ss_txrx_multiport" -a 'pcies:0.0;pcies:0.1' \
+   ./yunsdr_ss_txrx_multiport -a 'pcies:0.0;pcies:0.1' \
      -f 2400000000 -s 122880000 -g 5 -G 70 -c 0x3 -C 0x3 -N 122880
-   "$test_dir/yunsdr_ss_rate" -a 'pcies:0.0;pcies:0.1' \
+   ./yunsdr_ss_rate -a 'pcies:0.0;pcies:0.1' \
      -f 2400000000 -s 122880000 -g 5 -G 70 -c 0x3 -C 0x3 -N 122880 -r 2 -n 3
    ```
 
@@ -553,16 +569,15 @@ Copy-Item "$pa\bin\portaudio_x64.dll" "$pa\lib\portaudio_x64.dll"
 
 安装生成 `include\portaudio.h`、`lib\portaudio_x64.lib` 和 `bin\portaudio_x64.dll`。最后一行把 DLL 放在导入库旁边，以配合 libyunsdr 本包的构建后复制规则。若使用产品随附的预编译库，保证 DLL 与所选导入库同目录、同名且架构匹配。
 
-**配置 libyunsdr。** 回到其源码根目录。以下构建 PCIEX/PCIES 版。`load-pkgconfig.cmake` 用于在项目初始化时加载 CMake 的 PkgConfig 模块。本包关闭 USB3 后不会主动加载该模块，启用通信实验时可能报 `Unknown CMake command "PKG_CHECK_MODULES"`。使用这个外部文件即可保持交付源码原样。若还需 USB3，将 `ENABLE_USB3` 改为 `ON`，并加入 [Windows USB3 构建](#233-加入-usb3-支持) 中的 libusb 路径选项。
+**配置 libyunsdr。** 将前面三行的路径改为实际的源码、FFTW 和 PortAudio 目录。以下构建 PCIEX/PCIES 版。`load-pkgconfig.cmake` 在项目初始化时加载 CMake 的 PkgConfig 模块，供关闭 USB3 时的通信实验配置使用。若还需 USB3，将 `ENABLE_USB3` 改为 `ON`，并加入 [Windows USB3 构建](#233-加入-usb3-支持) 中的 libusb 路径选项。
 
 ```powershell
+Set-Location -LiteralPath 'C:\YunSDR\libyunsdr-26-01-00.1'
 $fftw = "C:\YunSDR\deps\fftw-3.3.5-dll64"
 $pa = "C:\YunSDR\deps\portaudio-x64"
-$comPrefix = Join-Path (Get-Location).Path "sdk-win64-comlabs"
-$hook = Join-Path (Get-Location).Path "load-pkgconfig.cmake"
-'find_package(PkgConfig QUIET)' | Set-Content -LiteralPath $hook -Encoding ascii
+'find_package(PkgConfig QUIET)' | Set-Content -LiteralPath .\load-pkgconfig.cmake -Encoding ascii
 cmake -S . -B build-win64-comlabs -G "Visual Studio 16 2019" -A x64 `
-  "-DCMAKE_INSTALL_PREFIX=$comPrefix" "-DCMAKE_PROJECT_INCLUDE=$hook" `
+  "-DCMAKE_INSTALL_PREFIX=$PWD\sdk-win64-comlabs" "-DCMAKE_PROJECT_INCLUDE=$PWD\load-pkgconfig.cmake" `
   -DENABLE_COMLABS=ON -DENABLE_EXAMPLE=ON -DENABLE_USB3=OFF `
   -DENABLE_PCIEX=ON -DENABLE_PCIES=ON -DENABLE_PCIE=OFF -DENABLE_SFP=OFF `
   "-DFFTW3_INCLUDE_DIRS=$fftw" "-DFFTW3F_INCLUDE_DIRS=$fftw" `
@@ -570,11 +585,14 @@ cmake -S . -B build-win64-comlabs -G "Visual Studio 16 2019" -A x64 `
   "-DPORTAUDIO_INCLUDE_DIRS=$pa\include" "-DPORTAUDIO_LIBRARIES=$pa\lib\portaudio_x64.lib"
 cmake --build build-win64-comlabs --config Release --parallel 4
 cmake --install build-win64-comlabs --config Release
-$comTests = Join-Path $comPrefix "tests\yunsdr_ss"
-$env:PATH = "$comPrefix\bin;$pa\bin;$fftw;$env:PATH"
-Get-ChildItem $comTests
-& "$comTests\yunsdr_ss_rx_fm_audio.exe" -h
-& "$comTests\yunsdr_ss_txrx_video.exe" -h
+```
+
+安装后进入测试目录运行帮助。安装步骤已把 SDK、FFTW 和 PortAudio 的 DLL 放到程序旁。
+
+```powershell
+Set-Location -LiteralPath .\sdk-win64-comlabs\tests\yunsdr_ss
+.\yunsdr_ss_rx_fm_audio.exe -h
+.\yunsdr_ss_txrx_video.exe -h
 ```
 
 **使用 CMake GUI**
@@ -606,19 +624,20 @@ cmake -S . -B build-linux-comlabs -DCMAKE_BUILD_TYPE=Release \
   -DENABLE_COMLABS=ON -DENABLE_EXAMPLE=ON -DENABLE_USB3=OFF \
   -DENABLE_PCIEX=ON -DENABLE_PCIES=ON -DENABLE_PCIE=OFF -DENABLE_SFP=OFF
 cmake --build build-linux-comlabs --parallel 4
-sudo cmake --install build-linux-comlabs
-sudo ldconfig
-com_tests="$PWD/build-linux-comlabs/tests"
-export LD_LIBRARY_PATH="$PWD/build-linux-comlabs/lib"
-ldd "$com_tests/yunsdr_ss_rx_fm_audio"
-ldd "$com_tests/yunsdr_ss_txrx_video"
-"$com_tests/yunsdr_ss_rx_fm_audio" -h
-"$com_tests/yunsdr_ss_txrx_video" -h
 ```
 
-Linux 的程序和 `udp_qpsk.py` 在 `build-linux-comlabs/tests/`。上面设置的动态库路径用于加载这套通信实验构建。配置日志要能找到 PortAudio、ALSA 和 FFTW，`ldd` 应解析到 `build-linux-comlabs/lib/libyunsdr_ss.so` 及系统的依赖库。Windows 已验证这两个目标的编译、安装和帮助输出。Linux 构建与两种通信实验的射频联调见 [兼容矩阵](compatibility.md)。
+进入测试目录，设置共享库路径后检查帮助。从其他位置启动时，将 `cd` 改为实际的测试目录。
 
-使用图形界面时，可在 Debian/Ubuntu 安装 `cmake-qt-gui`，从源码目录启动 `cmake-gui`。设置源码目录和 `build-linux-comlabs`，首次 **Configure** 选择 **Unix Makefiles**，将 `CMAKE_BUILD_TYPE` 设为 `Release`，其余变量按上述命令设置。再次 **Configure** 并 **Generate**，随后执行终端里的编译、安装和验证命令。
+```bash
+cd build-linux-comlabs/tests
+export LD_LIBRARY_PATH="$PWD/../lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+./yunsdr_ss_rx_fm_audio -h
+./yunsdr_ss_txrx_video -h
+```
+
+配置日志应找到 PortAudio、ALSA 和 FFTW。排查共享库时可在测试目录运行 `ldd ./yunsdr_ss_rx_fm_audio` 或 `ldd ./yunsdr_ss_txrx_video`。需要系统安装时，从源码根目录执行 `sudo cmake --install build-linux-comlabs` 和 `sudo ldconfig`。Windows 已验证构建、安装和帮助输出。Linux 构建与射频联调的状态见 [兼容矩阵](compatibility.md)。
+
+使用图形界面时，可在 Debian/Ubuntu 安装 `cmake-qt-gui`，从源码目录启动 `cmake-gui`。设置源码目录和 `build-linux-comlabs`，首次 **Configure** 选择 **Unix Makefiles**，将 `CMAKE_BUILD_TYPE` 设为 `Release`，其余变量按上述命令设置。再次 **Configure** 并 **Generate**，然后按上面的命令编译和验收。
 
 #### 4.4.2 FM 音频接收
 
@@ -630,14 +649,14 @@ Linux 的程序和 `udp_qpsk.py` 在 `build-linux-comlabs/tests/`。上面设置
 
 ##### 启动并验证
 
-在完成 4.4.1 构建和路径配置的终端启动。按主机系统选用下面的命令。
+进入第 4.4.1 节的通信实验测试目录。Linux 沿用该节设置的 `LD_LIBRARY_PATH`。按主机系统选用下面的命令。
 
 ```powershell
-& "$comTests\yunsdr_ss_rx_fm_audio.exe" -a 'pciex:0' -f 91600000 -s 10000000 -g 10 -c 0x1
+.\yunsdr_ss_rx_fm_audio.exe -a 'pciex:0' -f 91600000 -s 10000000 -g 10 -c 0x1
 ```
 
 ```bash
-"$com_tests/yunsdr_ss_rx_fm_audio" -a 'pciex:0' -f 91600000 -s 10000000 -g 10 -c 0x1
+./yunsdr_ss_rx_fm_audio -a 'pciex:0' -f 91600000 -s 10000000 -g 10 -c 0x1
 ```
 
 数据从 RX 射频输入进入 SDK 的多路 I/Q 接收，经带宽处理、FM 解调和降采样，由 PortAudio 播放。本版按 `10 MHz / 40 / 5` 生成约 50 kHz 的音频输出。看到设备版本、接收帧长和 PortAudio 初始化后，收听所选电台并确认内容、连续性。结束时按 Ctrl+C。
@@ -665,14 +684,14 @@ Linux 的程序和 `udp_qpsk.py` 在 `build-linux-comlabs/tests/`。上面设置
 ##### 配置 VLC 并启动
 
 1. **先启动接收 VLC。** 若 VLC 设置为只允许运行一个实例，在「工具 → 首选项 → 界面」关闭单实例限制，以便分别打开发送和接收窗口。接收窗口选择「媒体 → 打开网络串流」，输入 `udp://@:1235`，点击「播放」。
-2. **启动 SDR 视频程序。** 在完成 4.4.1 构建和路径配置的终端执行。显式指定 `-s 10000000`，匹配例程固定的内部调制和解调时基。`-f` 为 RF 中心频率（Hz），以测试链路可用的频点替换。`-c 0x1 -C 0x1` 选本地第 1 路 RX/TX，`-g` 与 `-G` 按回环电平调整。
+2. **启动 SDR 视频程序。** 在第 4.4.1 节的通信实验测试目录执行。Linux 沿用该节设置的 `LD_LIBRARY_PATH`。指定 `-s 10000000` 以匹配例程固定的调制解调时基。`-f` 为 RF 中心频率（Hz）。`-c 0x1 -C 0x1` 选本地第 1 路 RX/TX，`-g` 与 `-G` 按回环电平调整。
 
    ```powershell
-   & "$comTests\yunsdr_ss_txrx_video.exe" -a 'pciex:0' -f 500000000 -s 10000000 -g 6 -G 65 -c 0x1 -C 0x1
+   .\yunsdr_ss_txrx_video.exe -a 'pciex:0' -f 500000000 -s 10000000 -g 6 -G 65 -c 0x1 -C 0x1
    ```
 
    ```bash
-   "$com_tests/yunsdr_ss_txrx_video" -a 'pciex:0' -f 500000000 -s 10000000 -g 6 -G 65 -c 0x1 -C 0x1
+   ./yunsdr_ss_txrx_video -a 'pciex:0' -f 500000000 -s 10000000 -g 6 -G 65 -c 0x1 -C 0x1
    ```
 
 3. **用另一 VLC 实例发送。**
@@ -687,18 +706,18 @@ Linux 的程序和 `udp_qpsk.py` 在 `build-linux-comlabs/tests/`。上面设置
 
 ##### 查看 QPSK 星座图和排查
 
-在有图形桌面的主机另开终端，切换到 libyunsdr 源码根目录。以下脚本路径对应 4.4.1 的构建和安装目录，使用自定义目录时替换该路径。首次使用时在工作目录建立虚拟环境并安装 NumPy、Matplotlib。Debian/Ubuntu 若提示缺少 venv，安装 `python3-venv`；绘图需要可用的 Matplotlib 图形后端。脚本无需额外参数。
+在有图形桌面的主机另开终端，进入第 4.4.1 节含 `udp_qpsk.py` 的测试目录。首次运行时创建虚拟环境并安装依赖，之后直接运行各代码块的最后一行。Debian/Ubuntu 若提示缺少 venv，安装 `python3-venv`。
 
 ```powershell
-python -m venv .venv
-& .\.venv\Scripts\python.exe -m pip install numpy matplotlib
-& .\.venv\Scripts\python.exe ".\sdk-win64-comlabs\tests\yunsdr_ss\udp_qpsk.py"
+py -3.11 -m venv .venv-sdk
+& .\.venv-sdk\Scripts\python.exe -m pip install numpy matplotlib
+& .\.venv-sdk\Scripts\python.exe .\udp_qpsk.py
 ```
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install numpy matplotlib
-.venv/bin/python "./build-linux-comlabs/tests/udp_qpsk.py"
+./.venv/bin/python -m pip install numpy matplotlib
+./.venv/bin/python ./udp_qpsk.py
 ```
 
 接通链路后观察 QPSK 点簇及 VLC 是否稳定播放。脚本在本机 `1236` 收包超时时会生成随机噪声作为显示数据，因此仅出现散点图还需检查实际 UDP 数据。
@@ -724,19 +743,22 @@ python3 -m venv .venv
 | `yunsdr_ss_commen` | 机型相关 SYSREF 控制示例 | `-a` 选设备，`-v` 写入扩展命令的 SYSREF 值。仅在配套资料定义该值时执行 |
 | `yunsdr_ss_firmware_update` | 查询 Flash 或查看/更新匹配镜像 | `-a` 选地址，`-info` 查询，`-f` 指定固件文件。更新按机型配套流程操作，日常安装验收只运行 `-h` |
 
-定时双向测试示例。若只接收，可用 `-r 1` 选择 RX 分支。此例的 `-T 0` 使用默认提前样点设置，非零补偿根据联机测出的时延确定。持续运行时用 Ctrl+C 结束。
+定时双向测试示例。把第一行的目录改为实际的扩展示例目录。若只接收，可用 `-r 1`。`-T 0` 使用默认提前样点设置，非零补偿按实测时延填写。持续运行时用 Ctrl+C 结束。
 
 Windows PowerShell
 
 ```powershell
-& "$exampleDir\yunsdr_ss_txrx_time.exe" -a 'pciex:0' -f 2400000000 -s 30720000 `
+Set-Location -LiteralPath 'C:\YunSDR\libyunsdr-26-01-00.1\sdk-win64\example\yunsdr_ss'
+.\yunsdr_ss_txrx_time.exe -a 'pciex:0' -f 2400000000 -s 30720000 `
   -g 5 -G 65 -c 0x1 -C 0x1 -N 30720 -r 2 -T 0
 ```
 
 Linux Bash
 
 ```bash
-"$example_dir/yunsdr_ss_txrx_time" -a 'pciex:0' -f 2400000000 -s 30720000 \
+cd "$HOME/libyunsdr-26-01-00.1/build-linux/example"
+export LD_LIBRARY_PATH="$PWD/../lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+./yunsdr_ss_txrx_time -a 'pciex:0' -f 2400000000 -s 30720000 \
   -g 5 -G 65 -c 0x1 -C 0x1 -N 30720 -r 2 -T 0
 ```
 
