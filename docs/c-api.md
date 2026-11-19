@@ -148,11 +148,20 @@ Get-Command gendef.exe
 ```powershell
 $pkg = 'C:\Downloads\mingw-w64-ucrt-x86_64-tools-14.0.0.r598.ge3d18511f-1-any.pkg.tar.zst'
 $mingwBin = 'C:\TDM-GCC-64\bin'
-tar.exe -xf $pkg -C $mingwBin --strip-components=2 ucrt64/bin/gendef.exe
+& "$env:SystemRoot\System32\tar.exe" -xf $pkg -C $mingwBin --strip-components=2 ucrt64/bin/gendef.exe
 Get-Command gendef.exe
 ```
 
-`Get-Command` 应显示 MinGW `bin` 下的 `gendef.exe`。该目录已经在 `Path` 时，可以直接继续构建。如果 MinGW `bin` 不可写，也可解到其他可写目录，再将该目录加入 `Path`。若当前窗口的 `tar.exe` 无法解压 `.zst`，可使用上面的 MSYS2 安装方式。
+`Get-Command` 应显示 MinGW `bin` 下的 `gendef.exe`。该目录已经在 `Path` 时，可以直接继续构建。如果 MinGW `bin` 不可写，也可解到其他可写目录，再将该目录加入 `Path`。
+
+**遇到 `unable to run program "zstd -d -qq"`。** 当前 `tar.exe` 需要外部程序来解压 `.zst`。若上面直接调用 Windows 自带的 `tar.exe` 仍报同样的错，下载 Zstandard 的 Windows x64 ZIP 并解压。在同一 PowerShell 保留 `$pkg` 和 `$mingwBin`，将第二行引号里的路径改为解压出的 `zstd.exe` 的实际路径。先生成普通 `.tar`，再由系统 `tar` 取出 `gendef.exe`。无需安装 MSYS2 或修改 `Path`。[下载 Zstandard Windows x64](https://github.com/meta/zstd/releases/download/v1.5.7/zstd-v1.5.7-win64.zip)
+
+```powershell
+$tarFile = "$env:TEMP\mingw-tools.pkg.tar"
+& 'C:\Tools\zstd-v1.5.7-win64\zstd.exe' -d -f -o $tarFile $pkg
+& "$env:SystemRoot\System32\tar.exe" -xf $tarFile -C $mingwBin --strip-components=2 ucrt64/bin/gendef.exe
+Get-Command gendef.exe
+```
 
 ##### 构建并验证 C 库
 
