@@ -575,14 +575,7 @@ Linux 的程序和 `udp_qpsk.py` 在 `build-linux-comlabs/tests/`。上面设置
 
 随包程序在一个进程内处理 TX 和 RX。在同一主机上安装 VLC，准备支持 10 MS/s 双向收发的设备。把选定的 TX、RX 口按设备说明接成带衰减的射频回环，确认发射功率与 RX 输入范围。输入可用配套测试素材 `bbc_video.ts`，或者用 VLC 将自己的短视频封装为 MPEG-TS。
 
-```mermaid
-flowchart LR
-    SEND["发送端 VLC · MPEG-TS"] -->|"UDP 1234"| MOD["程序 · 封帧和 QPSK 调制"]
-    MOD --> AIR["SDR TX / 射频回环 / SDR RX"]
-    AIR --> DEMOD["程序 · 解调和 TS 恢复"]
-    DEMOD -->|"UDP 1235"| PLAY["接收端 VLC"]
-    DEMOD -->|"UDP 1236"| PLOT["udp_qpsk.py · 星座图"]
-```
+![视频回环链路。发送端 VLC 通过 UDP 1234 送入 MPEG-TS，经 QPSK 调制、射频回环和解调后，通过 UDP 1235 送到接收端 VLC。UDP 1236 输出星座图数据。](assets/video-loopback.png)
 
 | 本机端口 | 发送方 | 接收方 |
 | --- | --- | --- |
@@ -731,23 +724,7 @@ Linux Bash
 
 应用使用同一设备句柄提交控制请求和流收发。主机库通过 `YUNSDR_TRANSPORT` 选择后端函数。PCIEX、PCIES 和 USB3 各自处理主机接口和内部帧。
 
-```mermaid
-flowchart LR
-    APP["C 应用 · 参数配置 · 样点处理"]
-    API["yunsdr_api_ss.h · 设备句柄"]
-    CTRL["控制入口 · cmd_send / cmd_send_then_recv"]
-    IQ["流入口 · stream_recv / stream_send"]
-    BE["已编入库的传输后端 · PCIEX / PCIES / USB3"]
-    HOST["配套驱动或 libusb"]
-    DEV["SDR 固件 / FPGA · 射频与时钟"]
-    APP --> API
-    API --> CTRL
-    API --> IQ
-    CTRL <--> BE
-    IQ <--> BE
-    BE <--> HOST
-    HOST <--> DEV
-```
+![程序架构。C 应用通过公共 C API 的设备句柄进入控制或 I/Q 流接口，随后经 PCIEX、PCIES 或 USB3 后端以及配套驱动或 libusb 与 SDR 固件和 FPGA 交互。](assets/c-api-architecture.png)
 
 应用生命周期为打开设备、读取能力与版本、配置射频和时钟、分配缓冲区、收发并检查状态、停止工作线程、关闭句柄。
 
@@ -766,19 +743,7 @@ flowchart LR
 
 普通多路接收返回逐通道的载荷。写成裸 IQ16 文件时另存采样率、通道、中心频率、时间戳和字节序。RAW 文件只含写入的样点。某些 PCIEX 或 USB3 路径支持 `format:float`，应用缓冲区随之变为每样点两份 `float`，需单独验证后端、缩放及 API 组合。
 
-```mermaid
-flowchart TB
-    RF_RX["RX 射频口"] --> ADC["ADC / 数字下变频"]
-    ADC --> FRAME_RX["设备数据帧 · 通道 · 样点数 · 时间戳"]
-    FRAME_RX --> HOST_RX["主机后端 · 拆帧与逐通道复制"]
-    HOST_RX --> APP_RX["buffer[i] · IQ16 · 检查返回点数"]
-    APP_RX --> SAVE["写逐通道文件或交给 DSP"]
-    WAVE["波形或 IQ16 输入文件"] --> APP_TX["逐通道缓冲区 · 掩码 · count · TX tick"]
-    APP_TX --> HOST_TX["主机后端 · 分片与组帧"]
-    HOST_TX --> FRAME_TX["设备按模式接收并调度样点"]
-    FRAME_TX --> DAC["数字上变频 / DAC"]
-    DAC --> RF_TX["TX 射频口"]
-```
+![I/Q 收发数据流。接收经 ADC、下变频、设备帧和主机拆帧后进入逐通道 IQ16 缓冲区。发射从逐通道输入缓冲区经主机组帧、设备调度、上变频和 DAC 到达 TX 射频口。](assets/iq-stream-flow.png)
 
 ### 7.2 零拷贝与原始帧
 
