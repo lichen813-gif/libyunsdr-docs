@@ -4,6 +4,18 @@
 
 [下载与构建](#2-下载构建与安装) · [Windows MinGW-w64](#234-使用-mingw-w64-构建-c-库) · [SWIG 构建 Python 绑定](#25-使用-swig-构建-python-绑定) · [首帧接收](#3-首帧接收) · [测试程序与参数](#4-使用随包例程) · [FM 与视频实验](#44-fm-音频接收与视频传输实验) · [函数参考](#5-函数参考) · [程序架构](#6-程序架构) · [数据格式与数据流](#7-iq-格式与数据流) · [同步与排查](#8-时间戳同步与排查)
 
+## 阅读指引
+
+| 开发方式 | 阅读顺序 |
+| --- | --- |
+| Windows C/C++，使用 MSVC | [2.1 获取 SDK](#21-获取-sdk-和驱动) → [2.3.1 准备工具](#231-准备编译工具和驱动) → [2.3.2 构建和安装](#232-配置编译和安装) → [第 3 节首帧接收](#3-首帧接收)或[第 4 节测试例程](#4-使用随包例程) |
+| Windows C/C++，使用 MinGW-w64 | [2.1 获取 SDK](#21-获取-sdk-和驱动) → [2.3.4 准备工具、构建和安装](#234-使用-mingw-w64-构建-c-库) → [第 4 节测试例程](#4-使用随包例程)。联机驱动见 [2.3.1](#231-准备编译工具和驱动) 的第 3、4 步 |
+| Linux C/C++ | [2.1 获取 SDK](#21-获取-sdk-和驱动) → [2.4 准备工具、构建和安装](#24-linux-x86-64-与-aarch64) → [第 3 节首帧接收](#3-首帧接收)或[第 4 节测试例程](#4-使用随包例程) |
+| Python 开发，使用配套预编译绑定 | 直接按 [Python 开发指南](python-guide.md#2-使用预编译-python-绑定) 选择平台、创建虚拟环境、导入库并运行例程。联机时按 [2.1 的第 3 步](#21-获取-sdk-和驱动) 准备设备驱动 |
+| 为指定 Python 版本从源码构建绑定 | [2.1 获取 SDK](#21-获取-sdk-和驱动) → 按工具链选择 [2.5.2 MSVC](#252-windows-x64-msvc)、[2.5.3 MinGW-w64](#253-windows-x64-mingw-w64) 或 [2.5.4 Linux](#254-linux-x86-64-与-aarch64) → [2.5.5 验证导入和打包](#255-验证导入和打包) |
+
+第 2.3 节是 Windows 工具链与 C 库构建说明，第 2.5 节用于从源码生成 Python 绑定。只做 C/C++ 开发或使用 Python 预编译绑定，都可以跳过第 2.5 节。自行构建 Python 绑定时，按第 2.5 节引用的步骤准备工具、源码和依赖，同一次构建会生成 C 库和绑定，无需预先构建或安装 C 库。
+
 ## 1. 交付版本核对
 
 | 核对项 | 结果 |
@@ -58,14 +70,46 @@ Windows ARM64、32 位主机和 macOS 的构建组合待确认。
 
 #### 2.3.1 准备编译工具和驱动
 
-1. 安装 Visual Studio 2019 或 [Visual Studio 2022 Build Tools](https://aka.ms/vs/17/release/vs_BuildTools.exe)，选择「使用 C++ 的桌面开发」和一套 Windows 10 或 11 SDK。VS2019 选 MSVC v142 x64/x86 工具，VS2022 选 v143 x64/x86 工具，需要使用 v142 时可在「单个组件」加装。安装 CMake 并加入 `Path`，用 `cmake --version` 检查。VS2019 生成器要求 CMake 3.16 或更新版本，VS2022 要求 3.21 或更新版本。使用对应版本的 Developer PowerShell。[Build Tools 组件清单](https://learn.microsoft.com/en-us/visualstudio/install/workload-component-id-vs-build-tools?view=vs-2022)
+1. 安装 Visual Studio 2019 或 [Visual Studio 2022 Build Tools](https://aka.ms/vs/17/release/vs_BuildTools.exe)，选择「使用 C++ 的桌面开发」和一套 Windows 10 或 11 SDK。VS2019 选 MSVC v142 x64/x86 工具，VS2022 选 v143 x64/x86 工具，需要使用 v142 时可在「单个组件」加装。按本节下方的检查步骤准备 CMake。[Build Tools 组件清单](https://learn.microsoft.com/en-us/visualstudio/install/workload-component-id-vs-build-tools?view=vs-2022)
 2. 将交付 ZIP 解压到用户可写目录，例如 `C:\YunSDR\libyunsdr-26-01-00.1`。进入包含 `CMakeLists.txt`、`cmake`、`lib` 和 `src` 的一层。
 3. 使用 `pciex:` 或 `pcies:` 时，解压该设备配套的 Windows x64 驱动。如果交付的是 INF 驱动包，在设备管理器中定位板卡，选择「更新驱动程序 → 浏览我的电脑以查找驱动程序」，选择包含匹配 INF 的目录，随后完成安装。如果驱动包配有安装程序，则运行该程序。安装后在设备属性的「常规」页确认设备工作正常，在「驱动程序」页记录版本。
 4. 使用 `usb3:` 时，将设备插入 SuperSpeed USB 端口。若设备未识别或驱动未绑定，在设备管理器的「详细信息 → 硬件 ID」核对设备标识，再安装该机型配套的 USB 驱动。
 
+##### 检查 CMake 是否可用
+
+先打开对应版本的 Developer PowerShell，在将要构建的同一窗口运行下面两行。VS2019 路线使用 CMake 3.16 或更新版本，VS2022 生成器要求 3.21 或更新版本。[VS2022 生成器说明](https://cmake.org/cmake/help/v3.31/generator/Visual%20Studio%2017%202022.html)
+
+```powershell
+Get-Command cmake.exe
+cmake --version
+```
+
+如果提示 `CommandNotFoundException`，这个窗口找不到 `cmake.exe`，配置还未执行。按安装情况处理。
+
+- **已安装独立 CMake。** 检查默认的安装目录。如果在自定义位置安装，把第一行替换为实际包含 `cmake.exe` 的目录。`Test-Path` 显示 `True` 后，在同一窗口执行最后两行。
+
+  ```powershell
+  $cmakeBin = "$env:ProgramFiles\CMake\bin"
+  Test-Path -LiteralPath "$cmakeBin\cmake.exe"
+  $env:Path = "$cmakeBin;$env:Path"
+  cmake --version
+  ```
+
+- **已安装 Visual Studio 的 CMake 组件。** 用 Visual Studio Installer 自带的 `vswhere.exe` 查找。执行前三行，看到 `cmake.exe` 的路径后，再运行最后两行。[vswhere 使用说明](https://github.com/microsoft/vswhere/wiki)
+
+  ```powershell
+  $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+  $cmakeExe = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.CMake.Project -find 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
+  $cmakeExe
+  $env:Path = "$(Split-Path -Parent $cmakeExe);$env:Path"
+  cmake --version
+  ```
+
+- **尚未安装 CMake。** 可安装官方 Windows x64 MSI，安装时选择将 CMake 加入 `Path`，也可在 Visual Studio Installer 的「单个组件」中添加 **适用于 Windows 的 C++ CMake 工具**。安装后重新打开 Developer PowerShell，检查 `cmake --version`。若使用 VS 自带版本且仍找不到命令，按上一项定位。[CMake 下载](https://cmake.org/download/) · [Visual Studio 组件清单](https://learn.microsoft.com/en-us/visualstudio/install/workload-component-id-vs-build-tools?view=vs-2022)
+
 #### 2.3.2 配置、编译和安装
 
-默认同时启用 PCIEX、PCIES、USB3 和 RFIC 配置库。把第一行改成含 `CMakeLists.txt` 的源码根目录，路径不应包含空格。把 `$usb` 改成 libusb 1.0.29 的实际解压目录。使用 VS2022 Build Tools 的 v143 时，把 `$generator` 改为 `'Visual Studio 17 2022'`，把 `$toolset` 改为 `'v143'`，把 `$usbVs` 改为 `'VS2022'`。用 VS2022 的 v142 时，仅更改生成器，并使用新的构建目录。[下载 libusb 1.0.29 Windows 二进制包](https://github.com/libusb/libusb/releases/download/v1.0.29/libusb-1.0.29.7z)
+**准备路径和构建变量。** 默认同时启用 PCIEX、PCIES、USB3 和 RFIC 配置库。把第一行改成含 `CMakeLists.txt` 的源码根目录，路径不应包含空格。把 `$usb` 改成 libusb 1.0.29 的实际解压目录。使用 VS2022 Build Tools 的 v143 时，把 `$generator` 改为 `'Visual Studio 17 2022'`，把 `$toolset` 改为 `'v143'`，把 `$usbVs` 改为 `'VS2022'`。用 VS2022 的 v142 时，仅更改生成器。[下载 libusb 1.0.29 Windows 二进制包](https://github.com/libusb/libusb/releases/download/v1.0.29/libusb-1.0.29.7z)
 
 ```powershell
 Set-Location -LiteralPath 'C:\YunSDR\libyunsdr-26-01-00.1'
@@ -78,7 +122,7 @@ $usbArgs = @('-DENABLE_USB3=ON',
     "-Dusb_LIBRARY=$usb\$usbVs\MS64\dll\libusb-1.0.lib")
 ```
 
-配置后核对输出中的 `Found LIBPCIES`、`Found LIBFIRMWARE` 和 `libusb version: 1.0.29`。前两项应指向交付包中的 Windows x64 库。配置成功后再编译，编译成功后再安装。`build-win64` 保存构建产物，`sdk-win64` 是安装目录。
+**配置 C 库。** 在同一窗口运行下面的命令。`build-win64` 保存构建产物，`sdk-win64` 是安装目录。更换生成器或工具集时使用新的 `$buildDir`，例如 `build-win64-v143`。
 
 ```powershell
 $buildDir = 'build-win64'
@@ -87,7 +131,17 @@ cmake -S . -B $buildDir -G $generator -A x64 -T $toolset `
   "-DCMAKE_INSTALL_PREFIX=$prefix" -DENABLE_EXAMPLE=ON `
   -DENABLE_PCIEX=ON -DENABLE_PCIES=ON -DENABLE_FIRMWARE=ON `
   -DENABLE_PCIE=OFF -DENABLE_SFP=OFF -DENABLE_COMLABS=OFF -DENABLE_PYTHON=OFF @usbArgs
+```
+
+配置输出应有 `Found LIBPCIES`、`Found LIBFIRMWARE` 和 `libusb version: 1.0.29`。前两项应指向交付包中的 Windows x64 库。看到 `Generating done` 后，在同一窗口编译。
+
+```powershell
 cmake --build $buildDir --config Release --parallel 4
+```
+
+编译成功后安装。
+
+```powershell
 cmake --install $buildDir --config Release
 ```
 
@@ -301,7 +355,7 @@ grep YUNSDR_VERSION_STRING /usr/local/include/version.h
 
 ### 2.5 使用 SWIG 构建 Python 绑定
 
-本节用于从交付源码生成 Python 绑定及配套的 C 库。先按上面的平台章节准备工具链和依赖，再配置 Python 扩展。面向例程用户的解压、导入和调试步骤见 [Python 开发指南](python-guide.md)。
+本节用于从交付源码生成 Python 绑定及配套的 C 库。各平台只复用前面章节的工具链、源码路径和依赖准备步骤，本节的构建命令会同时编译 C 库和 Python 扩展。面向例程用户的解压、导入和调试步骤见 [Python 开发指南](python-guide.md)。
 
 按交付目标选择 CPython 主次版本和主机架构。下面以 CPython 3.11 x64 为 Windows 验证基线。为不同 Python 版本或不同后端构建时，使用各自的虚拟环境、构建目录和安装目录。
 
@@ -321,7 +375,7 @@ $swig = (Get-Command swig.exe).Source
 
 #### 2.5.2 Windows x64 MSVC
 
-按 [MSVC 默认构建](#232-配置编译和安装) 执行第一个代码块，进入源码目录并设置 `$generator`、`$toolset` 和 `$usbArgs`。执行第 2.5.1 节准备 Python 和 SWIG，再运行以下命令。默认开启 PCIEX、PCIES、USB3 和 RFIC 配置库。需要关闭 USB3 时，将 `$usbArgs` 设为 `@('-DENABLE_USB3=OFF')`，并将 `$profile` 改为 `'pciex-pcies'`。
+先按 [2.3.1](#231-准备编译工具和驱动) 准备 MSVC、CMake 和源码，再执行 [2.3.2](#232-配置编译和安装) 的「准备路径和构建变量」代码块，设置 `$generator`、`$toolset` 和 `$usbArgs`。在同一窗口执行第 2.5.1 节准备 Python 和 SWIG，然后直接运行以下命令。默认开启 PCIEX、PCIES、USB3 和 RFIC 配置库。需要关闭 USB3 时，将 `$usbArgs` 设为 `@('-DENABLE_USB3=OFF')`，并将 `$profile` 改为 `'pciex-pcies'`。
 
 ```powershell
 $profile = 'pciex-pcies-usb3'
@@ -365,7 +419,7 @@ cmake --install $buildDir
 
 #### 2.5.4 Linux x86-64 与 AArch64
 
-沿用第 2.4 节的编译工具与依赖，再安装 SWIG。使用 Debian 或 Ubuntu 自带的 CPython 构建时，安装与目标解释器匹配的 Python 开发包。下例使用 pyenv 生成的 `venv311`。把 `cd` 和 `py` 改为实际源码和解释器路径。[pyenv 环境搭建](python-guide.md#221-安装-pyenv-并生成-venv311)
+按 [2.4.1](#241-准备工具解压源码与核对设备) 准备编译工具、源码和依赖，再安装 SWIG。使用 Debian 或 Ubuntu 自带的 CPython 构建时，安装与目标解释器匹配的 Python 开发包。下例使用 pyenv 生成的 `venv311`。把 `cd` 和 `py` 改为实际源码和解释器路径。[pyenv 环境搭建](python-guide.md#221-安装-pyenv-并生成-venv311)
 
 ```bash
 sudo apt install swig libusb-1.0-0-dev
@@ -995,6 +1049,7 @@ export LD_LIBRARY_PATH="$PWD/../lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
 | 现象 | 排查顺序 |
 | --- | --- |
+| PowerShell 找不到 `cmake`（`CommandNotFoundException`） | 按 [CMake 检查步骤](#检查-cmake-是否可用) 定位或安装 `cmake.exe`，然后在同一窗口重新配置 |
 | `open_device` 返回 `NULL` | 地址前缀和索引 → CMake 实际启用的后端 → 驱动绑定和设备访问权限 → FPGA 镜像及链路状态 |
 | 找不到 `libyunsdr_ss.dll` 或 `libyunsdr_ss.so` | 检查安装路径、运行时搜索路径、依赖库及位数。SDK 配置和应用使用同一套头文件与库 |
 | Windows 链接报 `extract_subsystem_id` | PCIES 与 PCIEX 同时开启后重新构建，确认使用包内相应架构的 `libpcies.lib` |
