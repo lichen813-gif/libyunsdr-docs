@@ -2,7 +2,7 @@
 
 适用交付包为 `libyunsdr-26-01-00.1.zip`，SDK 源码声明版本为 **`26.00.00.1`**。通过 `yunsdr_api_ss.h` 调用主机端库 `yunsdr_ss`，完成设备打开、射频配置、I/Q 收发和时间戳处理。连接方式、通道和参数范围按所用机型及固件确认。
 
-[下载与构建](#2-下载构建与安装) · [Windows MinGW-w64](#234-使用-mingw-w64-构建-c-库) · [首帧接收](#3-首帧接收) · [测试程序与参数](#4-使用随包例程) · [FM 与视频实验](#44-fm-音频接收与视频传输实验) · [函数参考](#5-函数参考) · [程序架构](#6-程序架构) · [数据格式与数据流](#7-iq-格式与数据流) · [同步与排查](#8-时间戳同步与排查)
+[下载与构建](#2-下载构建与安装) · [Windows MinGW-w64](#234-使用-mingw-w64-构建-c-库) · [SWIG 构建 Python 绑定](#25-使用-swig-构建-python-绑定) · [首帧接收](#3-首帧接收) · [测试程序与参数](#4-使用随包例程) · [FM 与视频实验](#44-fm-音频接收与视频传输实验) · [函数参考](#5-函数参考) · [程序架构](#6-程序架构) · [数据格式与数据流](#7-iq-格式与数据流) · [同步与排查](#8-时间戳同步与排查)
 
 ## 1. 交付版本核对
 
@@ -46,33 +46,52 @@ Windows ARM64、32 位主机和 macOS 的构建组合待确认。
 | `ENABLE_COMLABS` | OFF | 在 `tests/` 加入 FM 和视频程序。相位校正目标还需要 `ENABLE_EXAMPLE=ON` |
 | `ENABLE_FIRMWARE` | ON | 启用配套固件支持。仅构建 USB3 时关闭此项，见 2.3.3 |
 
+| 手册默认构建配置 | PCIEX | PCIES | USB3 | 固件更新（`libfirmware`） |
+| --- | --- | --- | --- | --- |
+| Windows x64 MSVC | ON | ON | ON | ON |
+| Windows x64 MinGW-w64 | ON | OFF | ON | OFF |
+| Linux x86-64 / AArch64 | ON | ON | ON | ON |
+
 ### 2.3 Windows x64
 
 需要 PCIES 或固件更新时，使用第 2.3.1 至 2.3.3 节的 MSVC 路线。只需 PCIEX、USB3 或这两种后端时，也可从 [MinGW-w64 构建](#234-使用-mingw-w64-构建-c-库) 开始。联机驱动按第 2.3.1 节第 3、4 步准备。
 
 #### 2.3.1 准备编译工具和驱动
 
-1. 安装 Visual Studio 2019 或 Build Tools，选择「使用 C++ 的桌面开发」，确认包含 MSVC v142 x64/x86 工具和 Windows SDK。安装 CMake 3.16 或更新版本并加入 `PATH`，在 PowerShell 中运行 `cmake --version`。需要直接运行 `cl` 或 `lib.exe` 时，打开 Visual Studio 的 x64 开发者命令环境。
+1. 安装 Visual Studio 2019 或 [Visual Studio 2022 Build Tools](https://aka.ms/vs/17/release/vs_BuildTools.exe)，选择「使用 C++ 的桌面开发」和一套 Windows 10 或 11 SDK。VS2019 选 MSVC v142 x64/x86 工具，VS2022 选 v143 x64/x86 工具，需要使用 v142 时可在「单个组件」加装。安装 CMake 并加入 `Path`，用 `cmake --version` 检查。VS2019 生成器要求 CMake 3.16 或更新版本，VS2022 要求 3.21 或更新版本。使用对应版本的 Developer PowerShell。[Build Tools 组件清单](https://learn.microsoft.com/en-us/visualstudio/install/workload-component-id-vs-build-tools?view=vs-2022)
 2. 将交付 ZIP 解压到用户可写目录，例如 `C:\YunSDR\libyunsdr-26-01-00.1`。进入包含 `CMakeLists.txt`、`cmake`、`lib` 和 `src` 的一层。
 3. 使用 `pciex:` 或 `pcies:` 时，解压该设备配套的 Windows x64 驱动。如果交付的是 INF 驱动包，在设备管理器中定位板卡，选择「更新驱动程序 → 浏览我的电脑以查找驱动程序」，选择包含匹配 INF 的目录，随后完成安装。如果驱动包配有安装程序，则运行该程序。安装后在设备属性的「常规」页确认设备工作正常，在「驱动程序」页记录版本。
-4. 使用 `usb3:` 时，将设备插入 SuperSpeed USB 端口。若设备未识别或驱动未绑定，在设备管理器的「详细信息 → 硬件 ID」核对设备标识，再安装该机型配套的 USB 驱动。确认设备状态后，再按 2.3.3 准备 libusb 的编译和运行文件。
+4. 使用 `usb3:` 时，将设备插入 SuperSpeed USB 端口。若设备未识别或驱动未绑定，在设备管理器的「详细信息 → 硬件 ID」核对设备标识，再安装该机型配套的 USB 驱动。
 
 #### 2.3.2 配置、编译和安装
 
-把第一行路径改为含 `CMakeLists.txt` 的源码根目录。Windows 下该路径不应包含空格。配置成功后再编译和安装。`build-win64` 保存构建产物，`sdk-win64` 是安装目录。
+默认同时启用 PCIEX、PCIES、USB3 和固件更新支持。把第一行改成含 `CMakeLists.txt` 的源码根目录，路径不应包含空格。把 `$usb` 改成 libusb 1.0.29 的实际解压目录。使用 VS2022 Build Tools 的 v143 时，把 `$generator` 改为 `'Visual Studio 17 2022'`，把 `$toolset` 改为 `'v143'`，把 `$usbVs` 改为 `'VS2022'`。用 VS2022 的 v142 时，仅更改生成器，并使用新的构建目录。[下载 libusb 1.0.29 Windows 二进制包](https://github.com/libusb/libusb/releases/download/v1.0.29/libusb-1.0.29.7z)
 
 ```powershell
 Set-Location -LiteralPath 'C:\YunSDR\libyunsdr-26-01-00.1'
-$prefix = "$PWD\sdk-win64"
-cmake -S . -B build-win64 -G "Visual Studio 16 2019" -A x64 `
-  "-DCMAKE_INSTALL_PREFIX=$prefix" -DENABLE_EXAMPLE=ON `
-  -DENABLE_PCIEX=ON -DENABLE_PCIES=ON -DENABLE_PCIE=OFF -DENABLE_SFP=OFF `
-  -DENABLE_USB3=OFF -DENABLE_COMLABS=OFF
-cmake --build build-win64 --config Release --parallel 4
-cmake --install build-win64 --config Release
+$generator = 'Visual Studio 16 2019'
+$toolset = 'v142'
+$usbVs = 'VS2019'
+$usb = 'C:\YunSDR\deps\libusb-1.0.29'
+$usbArgs = @('-DENABLE_USB3=ON',
+    "-DLIBUSB_HEADER_FILE=$usb\include\libusb.h",
+    "-Dusb_LIBRARY=$usb\$usbVs\MS64\dll\libusb-1.0.lib")
 ```
 
-配置日志中的 `LIBPCIES_LIBRARIES` 应指向包内的 Windows x64 `libpcies.lib`。安装后在源码根目录执行以下命令。运行测试所需的 DLL 已与程序放在同一目录。
+配置后核对输出中的 `Found LIBPCIES`、`Found LIBFIRMWARE` 和 `libusb version: 1.0.29`。前两项应指向交付包中的 Windows x64 库。配置成功后再编译，编译成功后再安装。`build-win64` 保存构建产物，`sdk-win64` 是安装目录。
+
+```powershell
+$buildDir = 'build-win64'
+$prefix = "$PWD\sdk-win64"
+cmake -S . -B $buildDir -G $generator -A x64 -T $toolset `
+  "-DCMAKE_INSTALL_PREFIX=$prefix" -DENABLE_EXAMPLE=ON `
+  -DENABLE_PCIEX=ON -DENABLE_PCIES=ON -DENABLE_FIRMWARE=ON `
+  -DENABLE_PCIE=OFF -DENABLE_SFP=OFF -DENABLE_COMLABS=OFF -DENABLE_PYTHON=OFF @usbArgs
+cmake --build $buildDir --config Release --parallel 4
+cmake --install $buildDir --config Release
+```
+
+安装后在源码根目录执行以下命令。运行测试所需的 DLL 已与程序放在同一目录。`-h` 打印用法并返回 `-1`。
 
 ```powershell
 Select-String -Path .\sdk-win64\include\version.h -Pattern '^#define YUNSDR_VERSION_STRING'
@@ -83,35 +102,26 @@ Select-String -Path .\sdk-win64\include\version.h -Pattern '^#define YUNSDR_VERS
 | --- | --- |
 | `include\` | `yunsdr_api_ss.h` 用于编译应用，`version.h` 用于核对 SDK 版本 |
 | `lib\` | `yunsdr_ss.lib` 为 MSVC 导入库，`libyunsdr_ss.lib` 为静态归档。此目录还安装一份 `libyunsdr_ss.dll`，启用 USB3 时另有 libusb 的导入库和 DLL |
-| `bin\` | `libyunsdr_ss.dll`。将该目录加入当前会话 `PATH`，或随应用部署同一版 DLL |
+| `bin\` | `libyunsdr_ss.dll`。随应用部署时从 `lib\` 一并取用 USB3 所需的 `libusb-1.0.dll` |
 | `tests\yunsdr_ss\`、`example\yunsdr_ss\` | 测试程序、扩展示例及运行所需的 DLL。启动命令见第 4 节 |
 
 **使用 CMake GUI 和 Visual Studio**
 
 1. 打开 `cmake-gui`。在 **Where is the source code** 填含 `CMakeLists.txt` 的解压目录，在 **Where to build the binaries** 填一个新目录，例如 `build-win64-gui`。
-2. 点击 **Configure**，生成器选择 **Visual Studio 16 2019**，平台选择 **x64**。首次配置后将 `CMAKE_INSTALL_PREFIX` 改为实际的安装目录，例如源码下的 `sdk-win64`。勾选 `ENABLE_PCIEX`、`ENABLE_PCIES` 和 `ENABLE_EXAMPLE`，其余选项按上面的命令设置。首次配置若提示缺少 libusb，在只构建 PCIEX/PCIES 时取消 `ENABLE_USB3` 并重新配置。
+2. 点击 **Configure**，选择已安装的 Visual Studio 生成器，平台选 **x64**。将 `CMAKE_INSTALL_PREFIX` 改为实际的安装目录，例如源码下的 `sdk-win64`。勾选 `ENABLE_PCIEX`、`ENABLE_PCIES`、`ENABLE_USB3`、`ENABLE_FIRMWARE` 和 `ENABLE_EXAMPLE`。将 `LIBUSB_HEADER_FILE` 与 `usb_LIBRARY` 按上面命令的路径设置。字段尚未显示时，用 **Add Entry** 以 `FILEPATH` 类型添加。
 3. 再点 **Configure**，检查输出里的编译器、依赖路径和错误。找不到某项依赖时，选中 **Advanced** 显示高级设置，填入匹配的库文件或头文件路径。配置通过后点击 **Generate**。
 4. 用 Visual Studio 打开构建目录内的 `YUNSDRLIB.sln`。将工具栏配置切到 **Release | x64**，在解决方案资源管理器中右键构建 **ALL_BUILD**，然后构建 **INSTALL**。按本节前面的检查命令核对安装目录、版本头文件和例程帮助。
 
-#### 2.3.3 加入 USB3 支持
+<a name="233-加入-usb3-支持"></a>
 
-在 SDK 源码根目录运行。把第一行的 `$usb` 路径改为 libusb 1.0.29 的实际解压目录。此配置同时启用 PCIEX、PCIES 和 USB3。构建时显式指定头文件和 VS2019 x64 导入库。本包对能识别版本的 Windows libusb 要求至少 1.0.23。[libusb 官方发布包](https://github.com/libusb/libusb/releases/tag/v1.0.29)
+#### 2.3.3 可选 MSVC 后端配置
 
-```powershell
-$usb = "C:\YunSDR\deps\libusb-1.0.29"
-cmake -S . -B build-win64-usb -G "Visual Studio 16 2019" -A x64 `
-  "-DCMAKE_INSTALL_PREFIX=$PWD\sdk-win64-usb" "-DLIBUSB_HEADER_FILE=$usb\include\libusb.h" `
-  "-Dusb_LIBRARY=$usb\VS2019\MS64\dll\libusb-1.0.lib" `
-  -DENABLE_USB3=ON -DENABLE_PCIEX=ON -DENABLE_PCIES=ON `
-  -DENABLE_PCIE=OFF -DENABLE_SFP=OFF -DENABLE_EXAMPLE=ON -DENABLE_COMLABS=OFF
-cmake --build build-win64-usb --config Release --parallel 4
-cmake --install build-win64-usb --config Release
-.\sdk-win64-usb\tests\yunsdr_ss\yunsdr_ss_rate.exe -h
-```
+每种可选配置使用独立的 `$buildDir` 和 `$prefix`，其余命令沿用第 2.3.2 节。
 
-只构建 USB3 时，使用独立的构建和安装目录，并设 `-DENABLE_PCIEX=OFF -DENABLE_PCIES=OFF -DENABLE_FIRMWARE=OFF`。本包的固件更新入口依赖 PCIES 提供的链接符号。联机使用 `usb3:0`，普通收发使用多路 API，单通道也用同一接口。
-
-使用 CMake GUI 时，先新建 `build-win64-usb`，设置独立的 `CMAKE_INSTALL_PREFIX` 并勾选 `ENABLE_USB3`。在 **Advanced** 中把 `LIBUSB_HEADER_FILE` 指向 `include\libusb.h`，把 `usb_LIBRARY` 指向 `VS2019\MS64\dll\libusb-1.0.lib`。若字段尚未显示，用 **Add Entry** 以 `FILEPATH` 类型添加。再次 **Configure** 后确认已识别 libusb 版本，然后 **Generate**，按 2.3.2 构建和安装。
+| 用途 | 在第 2.3.2 节修改 |
+| --- | --- |
+| 仅 PCIEX、PCIES 和固件更新 | 设置 `$usbArgs = @('-DENABLE_USB3=OFF')` |
+| 仅 USB3 | 保留默认的 `$usbArgs`，在 CMake 命令中将 `ENABLE_PCIEX`、`ENABLE_PCIES` 和 `ENABLE_FIRMWARE` 都设为 `OFF`。本包的固件更新入口有 PCIES 链接依赖 |
 
 #### 2.3.4 使用 MinGW-w64 构建 C 库
 
@@ -123,14 +133,17 @@ cmake --install build-win64-usb --config Release
 
 从仓库的 GitHub Releases 下载 Windows x64 版 `gendef.exe`，放到已加入 `Path` 的 MinGW `bin` 目录，例如 `C:\TDM-GCC-64\bin`。如果刚修改过 `Path`，先重新打开 PowerShell。[下载 gendef.exe](https://github.com/lichen813-gif/libyunsdr-docs/releases/download/gendef-win64-14.0.0-r598/gendef.exe) · [来源、源码和许可证](https://github.com/lichen813-gif/libyunsdr-docs/releases/tag/gendef-win64-14.0.0-r598)
 
-在普通 PowerShell 中运行以下命令。`Get-Command` 应显示同一个 MinGW `bin` 下的 `gcc.exe`、`g++.exe`、`mingw32-make.exe` 和 `gendef.exe`。`gcc -dumpmachine` 应输出 `x86_64-w64-mingw32`。
+在普通 PowerShell 中运行以下命令。`Get-Command` 应显示同一个 MinGW `bin` 下的 `gcc.exe`、`g++.exe`、`mingw32-make.exe`、`dlltool.exe` 和 `gendef.exe`。核对 GCC 版本为已验证的 9.2.0，目标为 `x86_64-w64-mingw32`。TDM-GCC 4.9.2 在此交付包的公共日志模块上出现 `undefined reference to localtime_s`。
 
 ```powershell
-Get-Command gcc.exe, g++.exe, mingw32-make.exe, gendef.exe, cmake.exe
+Get-Command gcc.exe, g++.exe, mingw32-make.exe, dlltool.exe, gendef.exe, cmake.exe
+gcc --version
 gcc -dumpmachine
 ```
 
 ##### 构建并验证 C 库
+
+<a name="mingw-backends"></a>
 
 **选择后端。** 把 `Set-Location` 引号里的路径改成实际源码根目录，路径不应包含空格。
 
@@ -138,18 +151,11 @@ gcc -dumpmachine
 Set-Location -LiteralPath 'C:\YunSDR\libyunsdr-26-01-00.1'
 ```
 
-只构建 PCIEX 时执行这一组。
+默认同时启用 PCIEX 和 USB3。把 `$usb` 改为 libusb 1.0.29 的实际解压目录。命令使用包里的 `libusb-1.0.def`，在 `MinGW64\dll` 下生成 GNU x64 导入库。仅需 USB3 时，在执行命令前把 `$profile` 改为 `'usb3'`，把 `$pciex` 改为 `'OFF'`。[libusb Windows 二进制包](https://github.com/libusb/libusb/releases/download/v1.0.29/libusb-1.0.29.7z)
 
 ```powershell
-$profile = 'pciex'
-$backendArgs = @('-DENABLE_PCIEX=ON', '-DENABLE_USB3=OFF')
-```
-
-要启用 USB3，改用下面这一组。把 `$usb` 改为 libusb 1.0.29 的实际解压目录。命令使用包里的 `libusb-1.0.def`，在 `MinGW64\dll` 下生成 GNU x64 导入库。要同时启用 PCIEX 和 USB3，把 `$profile` 改为 `'pciex-usb3'`，把 `$pciex` 改为 `'ON'`。[libusb Windows 二进制包](https://github.com/libusb/libusb/releases/download/v1.0.29/libusb-1.0.29.7z)
-
-```powershell
-$profile = 'usb3'
-$pciex = 'OFF'
+$profile = 'pciex-usb3'
+$pciex = 'ON'
 $usb = 'C:\YunSDR\deps\libusb-1.0.29'
 $usbDllDir = "$usb\MinGW64\dll"
 Get-Command dlltool.exe
@@ -160,6 +166,13 @@ $backendArgs = @("-DENABLE_PCIEX=$pciex", '-DENABLE_USB3=ON',
 ```
 
 libusb 1.0.29 的 MinGW x64 DLL 内部登记的导出库名与文件名不同，直接链接 DLL 会让 Windows 启动时查找另一个文件名。生成的 GNU 导入库显式指定运行时文件名为 `libusb-1.0.dll`，并使用 `.lib` 后缀，便于交付包的 CMake 版本检查定位同目录 DLL。
+
+仅需 PCIEX 时，跳过上面的 libusb 配置，执行下面这一组。
+
+```powershell
+$profile = 'pciex'
+$backendArgs = @('-DENABLE_PCIEX=ON', '-DENABLE_USB3=OFF')
+```
 
 **配置。** 选好后端后运行以下命令。脚本从 `Path` 找到 MinGW 的 `bin`，将其中的 GCC、G++ 和 Make 显式传给 CMake。`--fresh` 会重新生成 CMake 缓存，适用于同一构建目录曾选中 `cl.exe` 的情况。[CMake 配置选项](https://cmake.org/cmake/help/latest/manual/cmake.1.html#cmdoption-cmake-fresh)
 
@@ -209,7 +222,7 @@ gcc .\verify_c_api.c "-I$prefix\include" "$prefix\lib\libyunsdr_ss.dll.a" -o "$p
 & "$prefix\tests\yunsdr_ss\verify_c_api.exe"
 ```
 
-**PCIES 和固件更新。** 本交付包在 MinGW 下会自动选中 Linux 的 `libpcies.a` 和 `libfirmware.a`。显式指定随包的 Windows `.lib` 后，链接仍缺少 `__security_check_cookie` 等 MSVC 运行库符号。使用这些功能时按第 2.3.2 或 2.3.3 节用 MSVC 构建。板卡联机收发尚待验证。PCIEX 和 USB3 的 Python 绑定构建及导入步骤见 [MinGW-w64 和 SWIG 构建 Python 绑定](python-guide.md#214-使用-mingw-w64-和-swig-构建-python-绑定)。
+**PCIES 和固件更新。** 本交付包在 MinGW 下会自动选中 Linux 的 `libpcies.a` 和 `libfirmware.a`。显式指定随包的 Windows `.lib` 后，链接仍缺少 `__security_check_cookie` 等 MSVC 运行库符号。需要这些功能时使用 [MSVC 默认构建](#232-配置编译和安装)。板卡联机收发尚待验证。[MinGW-w64 的 Python 绑定构建](#253-windows-x64-mingw-w64)
 
 ### 2.4 Linux x86-64 与 AArch64
 
@@ -254,14 +267,19 @@ test -f CMakeLists.txt
 
 #### 2.4.2 配置、编译和安装
 
-以下为 PCIEX/PCIES 配置。把第一行的 `cd` 路径改成实际的源码根目录。需要 USB3 时使用后面的独立配置。在仅构建 USB3 的配置中同时关闭 `ENABLE_PCIEX`、`ENABLE_PCIES` 和 `ENABLE_FIRMWARE`。Linux 步骤按交付包 CMake 核对，实机结果待验证。
+Linux x86-64 和 AArch64 的默认配置均开启 PCIEX、PCIES、USB3 和固件更新。先按第 2.4.1 节安装 `libusb-1.0-0-dev`，再把第一行的 `cd` 路径改成实际的源码根目录。Linux 步骤按交付包 CMake 核对，原生构建与设备联机的验证状态见 [兼容矩阵](compatibility.md)。
 
 ```bash
 cd "$HOME/libyunsdr-26-01-00.1"
 cmake -S . -B build-linux -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX=/usr/local -DENABLE_EXAMPLE=ON \
-  -DENABLE_PCIEX=ON -DENABLE_PCIES=ON -DENABLE_PCIE=OFF -DENABLE_SFP=OFF \
-  -DENABLE_USB3=OFF -DENABLE_COMLABS=OFF
+  -DENABLE_PCIEX=ON -DENABLE_PCIES=ON -DENABLE_USB3=ON -DENABLE_FIRMWARE=ON \
+  -DENABLE_PCIE=OFF -DENABLE_SFP=OFF -DENABLE_COMLABS=OFF -DENABLE_PYTHON=OFF
+```
+
+核对配置输出中的 `Found LIBPCIES`、`Found LIBFIRMWARE` 和 libusb 探测结果。x86-64 应使用包内 `lib/` 的 `libpcies.a` 和 `libfirmware.a`，AArch64 应使用 `lib/ARM64/` 下的对应文件。找不到库时，CMake 可能继续配置，需根据日志确认功能已编入。配置成功后再编译。
+
+```bash
 cmake --build build-linux --parallel 4
 ```
 
@@ -273,24 +291,142 @@ sudo ldconfig
 grep YUNSDR_VERSION_STRING /usr/local/include/version.h
 ```
 
-启用 PCIES 时，配置日志应显示与主机架构匹配的 `libpcies`。排查加载问题时，用 `file build-linux/lib/libyunsdr_ss.so` 核对架构，再在测试目录用 `ldd ./yunsdr_ss_txrx_multiport` 检查依赖。
+排查加载问题时，用 `file build-linux/lib/libyunsdr_ss.so` 核对架构，再在测试目录用 `ldd ./yunsdr_ss_txrx_multiport` 检查依赖。
 
-**Linux USB3 构建。** 在源码根目录运行。用于同一主机的 PCIEX/PCIES 也保留为开启状态。
-
-```bash
-sudo apt install libusb-1.0-0-dev
-cmake -S . -B build-linux-usb -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_INSTALL_PREFIX=/usr/local -DENABLE_EXAMPLE=ON \
-  -DENABLE_PCIEX=ON -DENABLE_PCIES=ON -DENABLE_PCIE=OFF -DENABLE_SFP=OFF \
-  -DENABLE_USB3=ON -DENABLE_COMLABS=OFF
-cmake --build build-linux-usb --parallel 4
-```
-
-将第 4.1 节的 Linux 测试目录换成 `build-linux-usb/tests/` 所在的完整路径。若要向系统安装 USB3 版，运行 `sudo cmake --install build-linux-usb` 和 `sudo ldconfig`。此安装会覆盖相同路径的核心 SDK 文件。
+可选精简构建使用新的构建目录。只需 PCIEX、PCIES 和固件更新时，将 `ENABLE_USB3` 设为 `OFF`。只需 USB3 时，保留 `ENABLE_USB3=ON`，将 `ENABLE_PCIEX`、`ENABLE_PCIES` 和 `ENABLE_FIRMWARE` 设为 `OFF`。相应的测试目录位于该构建目录的 `tests/`。
 
 本包在 Linux 将核心库和头文件分别安装到固定的 `/usr/local/lib` 和 `/usr/local/include`，上例也将 pkg-config 文件放到 `/usr/local/lib/pkgconfig`。测试和示例可执行文件留在 `build-linux/tests/` 和 `build-linux/example/`。若需保留多个版本，可在构建目录分别链接，并使用 `LD_LIBRARY_PATH` 指定对应构建的 `lib/`。系统安装会写入相同的核心库路径。[CMake 3.16 命令参考](https://cmake.org/cmake/help/v3.16/manual/cmake.1.html#install-a-project)
 
-只解压 ZIP 构建可能出现 `not a git repository`，安装后的 `version.h` 仍可用于核对版本。PCIES 缺依赖时配置可能继续，需查看日志实际找到的库。FM 音频和视频的专用构建步骤见 [通信实验](#441-构建通信实验)。
+只解压 ZIP 构建可能出现 `not a git repository`，安装后的 `version.h` 仍可用于核对版本。FM 音频和视频的专用构建步骤见 [通信实验](#441-构建通信实验)。
+
+### 2.5 使用 SWIG 构建 Python 绑定
+
+本节用于从交付源码生成 Python 绑定及配套的 C 库。先按上面的平台章节准备工具链和依赖，再配置 Python 扩展。面向例程用户的解压、导入和调试步骤见 [Python 开发指南](python-guide.md)。
+
+按交付目标选择 CPython 主次版本和主机架构。下面以 CPython 3.11 x64 为 Windows 验证基线。为不同 Python 版本或不同后端构建时，使用各自的虚拟环境、构建目录和安装目录。
+
+#### 2.5.1 Windows x64 准备 Python 和 SWIG
+
+安装 CPython 3.11 x64 并保留 Python Launcher。下载并完整解压 `swigwin-4.2.1.zip`，例如放到 `C:\YunSDR\tools\swigwin-4.2.1`，将含 `swig.exe` 的目录加入 `Path`。从所用工具链对应的 PowerShell 进入无空格的 SDK 源码根目录。源目录已有用匹配解释器创建的 `.venv-sdk` 时，可跳过创建命令。[CPython 3.11.9](https://www.python.org/downloads/release/python-3119/) · [SWIG Windows 二进制包](https://sourceforge.net/projects/swig/files/swigwin/swigwin-4.2.1/swigwin-4.2.1.zip/download)
+
+```powershell
+py -3.11 --version
+Get-Command swig.exe
+swig -version
+py -3.11 -m venv .venv-sdk
+$py = (Resolve-Path -LiteralPath .\.venv-sdk\Scripts\python.exe).Path
+$pythonHome = & $py -c "import sys; print(sys.base_prefix)"
+$swig = (Get-Command swig.exe).Source
+```
+
+#### 2.5.2 Windows x64 MSVC
+
+按 [MSVC 默认构建](#232-配置编译和安装) 执行第一个代码块，进入源码目录并设置 `$generator`、`$toolset` 和 `$usbArgs`。执行第 2.5.1 节准备 Python 和 SWIG，再运行以下命令。默认开启 PCIEX、PCIES、USB3 和固件更新。需要关闭 USB3 时，将 `$usbArgs` 设为 `@('-DENABLE_USB3=OFF')`，并将 `$profile` 改为 `'pciex-pcies'`。
+
+```powershell
+$profile = 'pciex-pcies-usb3'
+$buildDir = "build-win64-python-$toolset-$profile"
+$prefix = Join-Path $PWD "sdk-win64-python-$toolset-$profile"
+New-Item -ItemType Directory -Force -Path "$prefix\bin" | Out-Null
+cmake -S . -B $buildDir -G $generator -A x64 -T $toolset `
+  -DCMAKE_BUILD_TYPE=Release "-DCMAKE_INSTALL_PREFIX=$prefix" `
+  "-DPython_EXECUTABLE=$py" "-DPython_ROOT_DIR=$pythonHome" "-DSWIG_EXECUTABLE=$swig" `
+  -DENABLE_PYTHON=ON -DBUILD_PYTHON=ON -DENABLE_EXAMPLE=OFF -DENABLE_COMLABS=OFF `
+  -DENABLE_PCIEX=ON -DENABLE_PCIES=ON -DENABLE_FIRMWARE=ON `
+  -DENABLE_PCIE=OFF -DENABLE_SFP=OFF @usbArgs
+cmake --build $buildDir --config Release --parallel 4
+cmake --install $buildDir --config Release
+```
+
+先确认 CMake 找到目标 CPython 的 `Interpreter`、`Development` 组件和 SWIG，再编译及安装。VS2019 实测结果与 VS2022 Build Tools 的验证状态见 [兼容矩阵](compatibility.md)。
+
+#### 2.5.3 Windows x64 MinGW-w64
+
+先按第 2.3.4 节准备工具链并 [安装 gendef](#安装-gendef)，再按 [MinGW-w64 后端配置](#mingw-backends) 进入源码目录并设置 `$profile` 和 `$backendArgs`。默认同时启用 PCIEX 和 USB3。执行第 2.5.1 节准备 Python 和 SWIG，再运行以下命令。
+
+```powershell
+$mingw = Split-Path -Parent (Get-Command gcc.exe).Source
+$buildDir = Join-Path $PWD "build-win64-mingw-python-$profile"
+$prefix = Join-Path $PWD "sdk-win64-mingw-python-$profile"
+$pydDir = Join-Path $buildDir 'swig\python\yunsdr_ss\Release'
+New-Item -ItemType Directory -Force -Path "$prefix\bin" | Out-Null
+cmake --fresh -S . -B $buildDir -G 'MinGW Makefiles' -DCMAKE_BUILD_TYPE=Release `
+  "-DCMAKE_C_COMPILER=$mingw\gcc.exe" "-DCMAKE_CXX_COMPILER=$mingw\g++.exe" `
+  "-DCMAKE_MAKE_PROGRAM=$mingw\mingw32-make.exe" `
+  "-DCMAKE_INSTALL_PREFIX=$prefix" "-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=$pydDir" `
+  "-DPython_EXECUTABLE=$py" "-DPython_ROOT_DIR=$pythonHome" "-DSWIG_EXECUTABLE=$swig" `
+  -DENABLE_PYTHON=ON -DBUILD_PYTHON=ON -DENABLE_EXAMPLE=OFF -DENABLE_COMLABS=OFF `
+  -DENABLE_PCIES=OFF -DENABLE_FIRMWARE=OFF -DENABLE_PCIE=OFF -DENABLE_SFP=OFF @backendArgs
+cmake --build $buildDir --parallel 4
+cmake --install $buildDir
+```
+
+确认 CMake 选中 GNU 编译器、目标 CPython 和 SWIG，配置成功后再编译与安装。`CMAKE_LIBRARY_OUTPUT_DIRECTORY` 将 `_yunsdr_ss_api.pyd` 写入构建后复制规则要求的 `<构建目录>\swig\python\yunsdr_ss\Release`，安装后可在 `$prefix\bin` 中取用。PCIEX、USB3 和 PCIEX + USB3 均已通过离线构建与导入验证。[CMake 模块输出目录选项](https://cmake.org/cmake/help/latest/variable/CMAKE_LIBRARY_OUTPUT_DIRECTORY.html) · [兼容矩阵](compatibility.md)
+
+#### 2.5.4 Linux x86-64 与 AArch64
+
+沿用第 2.4 节的编译工具与依赖，再安装 SWIG。使用 Debian 或 Ubuntu 自带的 CPython 构建时，安装与目标解释器匹配的 Python 开发包。下例使用 pyenv 生成的 `venv311`。把 `cd` 和 `py` 改为实际源码和解释器路径。[pyenv 环境搭建](python-guide.md#221-安装-pyenv-并生成-venv311)
+
+```bash
+sudo apt install swig libusb-1.0-0-dev
+cd "$HOME/libyunsdr-26-01-00.1"
+py="$HOME/python_20260213/venv311/bin/python"
+python_home="$("$py" -c 'import sys; print(sys.base_prefix)')"
+build_dir="$PWD/build-linux-python"
+cmake -S . -B "$build_dir" -DCMAKE_BUILD_TYPE=Release \
+  -DPython_EXECUTABLE="$py" -DPython_ROOT_DIR="$python_home" \
+  -DENABLE_PYTHON=ON -DBUILD_PYTHON=ON -DENABLE_EXAMPLE=OFF -DENABLE_COMLABS=OFF \
+  -DENABLE_PCIEX=ON -DENABLE_PCIES=ON -DENABLE_USB3=ON -DENABLE_FIRMWARE=ON \
+  -DENABLE_PCIE=OFF -DENABLE_SFP=OFF
+cmake --build "$build_dir" --parallel 4
+```
+
+核对配置日志中的 Python 版本、`Interpreter` 和 `Development` 组件，以及主机架构对应的依赖库。构建将 `yunsdr_ss_api.py` 和 `_yunsdr_ss_api.so` 复制到 `$build_dir/lib/`，与 `libyunsdr_ss.so` 放在一起。原生构建实测状态见 [兼容矩阵](compatibility.md)。
+
+#### 2.5.5 验证导入和打包
+
+**Windows。** MSVC 和 MinGW 共用以下步骤。USB3 版先将同一次安装的 libusb DLL 复制到绑定目录。
+
+```powershell
+Copy-Item -LiteralPath "$prefix\lib\libusb-1.0.dll" -Destination "$prefix\bin"
+```
+
+用本次构建选中的解释器验证导入。应显示当前安装目录下的两个模块路径，并输出 `ticks = 15360`。
+
+```powershell
+Push-Location -LiteralPath "$prefix\bin"
+& $py -E -c "import yunsdr_ss_api as api, _yunsdr_ss_api as ext; print(api.__file__, ext.__file__, sep='\n'); print('ticks =', api.yunsdr_timeNsToTicks(500000, 30720000.0))"
+Pop-Location
+```
+
+导入成功后，在源码根目录打包。示例按 SDK 版本、CPython 版本、平台与后端命名 ZIP。
+
+```powershell
+$pythonTag = & $py -c "import sys; print('cp%d%d' % sys.version_info[:2])"
+$zip = "libyunsdr-26.00.00.1-$pythonTag-win64-$profile.zip"
+Compress-Archive -Path "$prefix\bin\*.py", "$prefix\bin\*.pyd", "$prefix\bin\*.dll" -DestinationPath $zip
+```
+
+**Linux。** 用同一构建的文件检查依赖与导入。
+
+```bash
+(
+  cd "$build_dir/lib" || exit
+  export LD_LIBRARY_PATH="$PWD${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+  ldd ./_yunsdr_ss_api.so
+  "$py" -E -c "import yunsdr_ss_api as api, _yunsdr_ss_api as ext; print(api.__file__, ext.__file__, sep='\n'); print('ticks =', api.yunsdr_timeNsToTicks(500000, 30720000.0))"
+)
+```
+
+离线导入成功后，从源码根目录打包这三个文件。
+
+```bash
+python_tag="$("$py" -c "import sys; print('cp%d%d' % sys.version_info[:2])")"
+archive="libyunsdr-26.00.00.1-$python_tag-linux-$(uname -m)-pciex-pcies-usb3.tar.gz"
+tar -czf "$archive" -C "$build_dir/lib" yunsdr_ss_api.py _yunsdr_ss_api.so libyunsdr_ss.so
+```
+
+离线验证通过后，把对应平台、架构和 CPython 版本的库与例程一起交付。随包标明启用的后端、所需运行库和支持的系统版本。例如，Windows MSVC 包注明 VC++ x64 运行库，Linux USB3 包注明系统 libusb 运行库。运行环境与示例见 [Python 预编译库使用说明](python-guide.md#2-使用预编译-python-绑定)。
 
 ## 3. 首帧接收
 
@@ -394,7 +530,6 @@ wc -c < rx_ch1.iq16
 | 三项基础测试 | `sdk-win64\tests\yunsdr_ss\*.exe`，安装前位于 `build-win64\tests\Release\` | `build-linux/tests/` |
 | MinGW-w64 基础测试 | `sdk-win64-mingw-<配置>\tests\yunsdr_ss\` | — |
 | 扩展示例 | `sdk-win64\example\yunsdr_ss\*.exe`，安装前位于 `build-win64\example\Release\` | `build-linux/example/` |
-| USB3 版基础测试 | `sdk-win64-usb\tests\yunsdr_ss\` | `build-linux-usb/tests/` |
 | FM 音频和视频 | `sdk-win64-comlabs\tests\yunsdr_ss\` | `build-linux-comlabs/tests/` |
 
 先运行 `-h` 检查程序能否加载。部分程序显示帮助后返回非零退出码。Linux 例程从上表的构建目录启动。
@@ -560,7 +695,7 @@ Copy-Item "$pa\bin\portaudio_x64.dll" "$pa\lib\portaudio_x64.dll"
 
 安装生成 `include\portaudio.h`、`lib\portaudio_x64.lib` 和 `bin\portaudio_x64.dll`。最后一行把 DLL 放在导入库旁边，以配合 libyunsdr 本包的构建后复制规则。若使用产品随附的预编译库，保证 DLL 与所选导入库同目录、同名且架构匹配。
 
-**配置 libyunsdr。** 将前面三行的路径改为实际的源码、FFTW 和 PortAudio 目录。以下构建 PCIEX/PCIES 版。`load-pkgconfig.cmake` 在项目初始化时加载 CMake 的 PkgConfig 模块，供关闭 USB3 时的通信实验配置使用。若还需 USB3，将 `ENABLE_USB3` 改为 `ON`，并加入 [Windows USB3 构建](#233-加入-usb3-支持) 中的 libusb 路径选项。
+**配置 libyunsdr。** 将前面三行的路径改为实际的源码、FFTW 和 PortAudio 目录。以下构建 PCIEX/PCIES 版。`load-pkgconfig.cmake` 在项目初始化时加载 CMake 的 PkgConfig 模块，供关闭 USB3 时的通信实验配置使用。若还需 USB3，将 `ENABLE_USB3` 改为 `ON`，并加入 [MSVC 默认构建](#232-配置编译和安装) 中的 libusb 路径选项。
 
 ```powershell
 Set-Location -LiteralPath 'C:\YunSDR\libyunsdr-26-01-00.1'

@@ -1,322 +1,36 @@
 # libyunsdr Python 开发指南
 
-本指南以 `libyunsdr-26-01-00.1.zip` 为基线，包内 SDK 版本为 **`26.00.00.1`**。使用 SWIG 绑定 `yunsdr_ss_api` 配置设备和传输 IQ16 数据。安装设备驱动、核对固件及选择 `pciex:`、`pcies:` 或 `usb3:` 时，参照 [C API 手册的驱动与构建章节](c-api.md#2-下载构建与安装)。
+本指南以 SDK **`26.00.00.1`** 为基线。使用随 Python 例程交付的预编译 `yunsdr_ss_api` 配置设备并收发 IQ16 数据。[C API 手册中的设备驱动与后端说明](c-api.md#2-下载构建与安装)
 
-[Windows x64](#21-windows-x64) · [Windows MinGW + SWIG](#214-使用-mingw-w64-和-swig-构建-python-绑定) · [Linux 与 Spyder](#22-linux-x86-64-与-aarch64) · [Windows 虚拟环境与 Spyder](#23-windows-虚拟环境与-spyder) · [Windows 命令行例程](#233-在-powershell-运行-python-例程) · [首帧接收](#4-接收首帧-iq) · [射频配置](#5-配置射频与时间戳) · [循环发射](#6-生成波形与循环发射) · [测试截图](#73-测试截图) · [排查问题](#8-常见问题)
+[Windows x64](#21-windows-x64) · [Linux x86-64 与 AArch64](#22-linux-x86-64-与-aarch64) · [Windows Spyder](#213-安装并启动-spyder) · [PowerShell 运行例程](#214-在-powershell-运行-python-例程) · [Linux Spyder](#223-从-venv311-启动-spyder-调试) · [首帧接收](#4-接收首帧-iq) · [循环发射](#6-生成波形与循环发射) · [测试截图](#73-测试截图) · [排查问题](#8-常见问题)
 
-## 1. 获取 SDK 和例程
+## 1. 获取预编译绑定和例程
 
-| 资料 | 内容与用途 |
+从配套资料取得 Python 例程及预编译绑定。通过产品资料下载时，在 **Python API基础和基础程序** 中选择对应产品的资料，按提示填写产品编号。`python_20260213.7z` 是配套例程包示例，含 OFDM、循环收发和相位校准等脚本。实际交付文件与支持组合以收到的包为准。
+
+| 选择项 | 如何核对 |
 | --- | --- |
-| `libyunsdr-26-01-00.1.zip` | 交付源码、C 库构建工程、SWIG 接口文件 `swig/yunsdr_ss_api.i` 和 `swig/python/yunsdr_ss/example/` 下的基础脚本。ZIP 哈希见 [交付版本核对](c-api.md#1-交付版本核对) |
-| `python_20260213.7z` | 另配的 Python 参考例程包，配套说明列有循环收发、单独发送、OFDM 和相位校准脚本。通过产品资料下载时，在 **Python API基础和基础程序** 中选择此包并按提示填写产品编号。该参考包未随上述 ZIP 交付，文件内容及与新版绑定的匹配关系需根据实际配套资料核对 |
+| SDK 与 Python 版本 | 选与例程配套的 SDK 版本。`cp311` 对应 CPython 3.11，`cp312` 对应 CPython 3.12。以下以 `cp311` 为例，其他版本按包标识选择解释器 |
+| 系统与架构 | 区分 Windows x64、Linux x86-64 和 Linux AArch64。Linux 同时核对包标注的发行版或系统运行库要求 |
+| 传输后端 | 核对包启用的 PCIEX、PCIES 或 USB3，按机型安装对应驱动 |
+| 配套文件 | 从同一个包取 Python 封装文件、扩展和动态库，置于脚本目录。切换版本时先移走同名旧文件 |
 
-从源码构建时，解压 SDK 并在包含 `CMakeLists.txt` 的根目录操作。只运行 Windows 例程时，可以使用同版的 [预编译绑定](#213-直接使用预编译包)。SDK ZIP 的 `swig/python/yunsdr_ss/old/` 保存的是历史例程及二进制文件。
+<a name="214-使用-mingw-w64-和-swig-构建-python-绑定"></a>
 
-## 2. 构建与导入 Python 绑定
+离线 OFDM 例程 `test_cofdm.py` 只需要 Python 依赖。收发例程还需要对应的预编译绑定、动态库和设备驱动。制作预编译包的步骤见 [C API 手册](c-api.md#25-使用-swig-构建-python-绑定)。
 
-测试基线为 Windows x64、Visual Studio 2019、CPython 3.11.9 和 SWIG 4.2.1。Python 绑定由 `ENABLE_PYTHON=ON` 和 `BUILD_PYTHON=ON` 启用。仅使用 Python 接口时，`ENABLE_EXAMPLE` 和 `ENABLE_COMLABS` 可以保持关闭。应使用构建时选中的 Python 解释器导入生成的扩展。
+<a name="2-构建与导入-python-绑定"></a>
+
+## 2. 使用预编译 Python 绑定
 
 ### 2.1 Windows x64
 
-从源码构建可选独立的 Visual Studio 2022 Build Tools，省去完整的 Visual Studio IDE。已有匹配的预编译包时，可直接按第 2.1.3 节运行。SDK 已在 VS2019 / MSVC `v142` 上验证构建和导入，独立 VS2022 Build Tools 的验证状态见 [兼容矩阵](compatibility.md)。
+<a name="23-windows-虚拟环境与-spyder"></a>
+<a name="231-创建或复用-venv-sdk"></a>
 
-下面的构建和预编译包验证命令都会创建 `.venv-sdk`。单独创建或复用虚拟环境，以及安装图形调试工具时，见 [Windows 虚拟环境与 Spyder](#23-windows-虚拟环境与-spyder)。
+#### 2.1.1 创建或复用 .venv-sdk
 
-也可用 MinGW-w64 和 SWIG 构建 PCIEX、USB3 的 Python 绑定。需要 PCIES 或固件更新时使用 MSVC 构建。[MinGW-w64 和 SWIG 构建步骤](#214-使用-mingw-w64-和-swig-构建-python-绑定)
-
-#### 2.1.1 安装 Visual Studio 2022 Build Tools
-
-1. 从 Microsoft 下载并运行 **Visual Studio 2022 Build Tools** 安装程序。在 **工作负载** 选择 **使用 C++ 的桌面开发**（Desktop development with C++）。工作负载会自动安装 MSBuild 和 C++ 核心组件。[VS2022 Build Tools 下载](https://aka.ms/vs/17/release/vs_BuildTools.exe)
-2. 在右侧 **安装详细信息** 或 **单个组件** 中，保留或勾选 **MSVC v143 - VS 2022 C++ x64/x86 生成工具**，以及一套 **Windows 10 SDK** 或 **Windows 11 SDK**。使用安装程序提供的 CMake 时，再勾选 **适用于 Windows 的 C++ CMake 工具**。已有独立 CMake 3.21 或更新版本时，可省去 CMake 组件。若要复用 VS2019 基线的编译器，再勾选 **MSVC v142 - VS 2019 C++ x64/x86 生成工具（v14.29）**。本工程可省去 AddressSanitizer、测试工具、MFC、ATL、Clang 和 ARM/ARM64 工具。[Build Tools 组件清单](https://learn.microsoft.com/en-us/visualstudio/install/workload-component-id-vs-build-tools?view=vs-2022) · [CMake 生成器说明](https://cmake.org/cmake/help/latest/generator/Visual%20Studio%2017%202022.html)
-3. 安装 **Windows installer (64-bit)** 版 CPython 3.11.9，保留 Python Launcher。下载带有 `swig.exe` 的 Windows 预编译包 `swigwin-4.2.1.zip`，解压整个包，例如解压后得到 `C:\YunSDR\tools\swigwin-4.2.1\swig.exe`。将该目录加到用户 `Path`，并保留同目录下的 `Lib`。使用独立 CMake 时，也把 `cmake.exe` 所在目录加到 `Path`。[CPython 3.11.9](https://www.python.org/downloads/release/python-3119/) · [下载 swigwin-4.2.1.zip](https://sourceforge.net/projects/swig/files/swigwin/swigwin-4.2.1/swigwin-4.2.1.zip/download) · [CMake 下载](https://cmake.org/download/)
-4. 从开始菜单打开 **Developer PowerShell for VS 2022**，检查工具版本。`cl` 此处用于显示编译器版本，构建目标架构由下一节的 `-A x64` 指定。
-
-   ```powershell
-   cmake --version
-   (Get-Command swig.exe).Source
-   swig -version
-   py -3.11 --version
-   cl
-   ```
-
-   SWIG 路径应指向刚解压的 `swigwin-4.2.1` 目录，版本输出应为 `SWIG Version 4.2.1`。
-
-#### 2.1.2 编译安装并验证导入
-
-**准备源码和 Python 环境。** 在 Developer PowerShell 中，把第一行 `Set-Location` 单引号里的路径改成含 `CMakeLists.txt` 的源码根目录。本交付包的 `gen_build_info` 规则要求源码路径不含空格。已有 `.venv-sdk` 时跳过第二行。使用已安装的 CPython 3.11 x64 和 `Path` 上的 SWIG。
-
-```powershell
-Set-Location -LiteralPath 'C:\YunSDR\libyunsdr-26-01-00.1'
-py -3.11 -m venv .venv-sdk
-$py = (Resolve-Path .\.venv-sdk\Scripts\python.exe).Path
-$pythonHome = & $py -c "import sys; print(sys.base_prefix)"
-$generator = 'Visual Studio 17 2022'
-$toolset = 'v143'
-```
-
-**选择构建配置。** 在下面两组命令中选一组。只需 PCIEX 和 PCIES 时执行这一组。
-
-```powershell
-$profile = 'pciex-pcies'
-$usbArgs = @('-DENABLE_USB3=OFF')
-```
-
-要同时启用 USB3，改用下面这一组。把 `$usb` 单引号里的路径改为 libusb 1.0.29 的实际解压目录。使用 `v142` 时，最后一行路径里的 `VS2022` 改成 `VS2019`。[libusb 1.0.29 Windows 二进制包](https://github.com/libusb/libusb/releases/download/v1.0.29/libusb-1.0.29.7z)
-
-```powershell
-$profile = 'pciex-pcies-usb3'
-$usb = 'C:\YunSDR\deps\libusb-1.0.29'
-$usbArgs = @('-DENABLE_USB3=ON',
-    "-DLIBUSB_HEADER_FILE=$usb\include\libusb.h",
-    "-Dusb_LIBRARY=$usb\VS2022\MS64\dll\libusb-1.0.lib")
-```
-
-**配置、编译和安装。** 两种配置共用以下命令。逐步执行，CMake 配置成功后再编译，编译成功后再安装。配置输出应找到 Python 的 `Interpreter`、`Development` 和 SWIG。源码 ZIP 缺少 Git 元数据时，构建可能提示 `not a git repository`，以命令的退出状态为准。
-
-```powershell
-$buildDir = "build-win64-python-$toolset-$profile"
-$prefix = Join-Path (Get-Location).Path "sdk-win64-python-$toolset-$profile"
-New-Item -ItemType Directory -Force -Path "$prefix\bin" | Out-Null
-cmake -S . -B $buildDir -G $generator -A x64 -T $toolset `
-  -DCMAKE_BUILD_TYPE=Release "-DCMAKE_INSTALL_PREFIX=$prefix" `
-  "-DPython_EXECUTABLE=$py" "-DPython_ROOT_DIR=$pythonHome" `
-  -DENABLE_PYTHON=ON -DBUILD_PYTHON=ON -DENABLE_EXAMPLE=OFF -DENABLE_COMLABS=OFF `
-  -DENABLE_PCIEX=ON -DENABLE_PCIES=ON -DENABLE_PCIE=OFF -DENABLE_SFP=OFF @usbArgs
-cmake --build $buildDir --config Release --parallel 4
-cmake --install $buildDir --config Release
-```
-
-USB3 版安装完成后，再执行这一行，将 libusb 的 DLL 放在 Python 绑定旁。
-
-```powershell
-Copy-Item -LiteralPath "$prefix\lib\libusb-1.0.dll" -Destination "$prefix\bin"
-```
-
-**验证导入。** 临时进入本次安装的 `bin` 检查导入。输出应显示该目录下的模块路径和 `ticks = 15360`。这项检查无需连接板卡。
-
-```powershell
-Push-Location -LiteralPath "$prefix\bin"
-& $py -E -c "import yunsdr_ss_api as api, _yunsdr_ss_api as ext; print(api.__file__, ext.__file__, sep='\n'); print('ticks =', api.yunsdr_timeNsToTicks(500000, 30720000.0))"
-Pop-Location
-```
-
-运行例程所需的 NumPy 等依赖按第 2.3 节安装。安装目录的 `bin` 中有 `yunsdr_ss_api.py`、`_yunsdr_ss_api.pyd` 和 `libyunsdr_ss.dll`，USB3 版还应有 `libusb-1.0.dll`。[PowerShell 运行例程](#233-在-powershell-运行-python-例程)
-
-在 VS2022 Build Tools 中已加装 `v142` 时，将 `$toolset` 改成 `'v142'`，继续使用 `Visual Studio 17 2022` 生成器。使用现有 VS2019 时，在 VS2019 的 Developer PowerShell 进入新的源码解压目录，将 `$generator` 改成 `'Visual Studio 16 2019'`、`$toolset` 改成 `'v142'` 后执行同一组命令。构建目录中的 CMake 缓存绑定到首次使用的生成器和工具集。
-
-#### 2.1.3 直接使用预编译包
-
-在编译机完成第 2.1.2 节后，可以把同一次 Release 安装中的运行文件打成 ZIP，给另一台 Windows x64 电脑使用。若已从交付方取得同版预编译包，可直接解压验证。以下 ZIP 名称包含 SDK 版本、Python 版本、架构和启用的后端。
-
-```powershell
-$zip = "libyunsdr-26.00.00.1-cp311-win64-$profile.zip"
-Compress-Archive -Path "$prefix\bin\*.py", "$prefix\bin\*.pyd", "$prefix\bin\*.dll" -DestinationPath $zip -Force
-```
-
-在运行机安装 **CPython 3.11 x64** 和 **Microsoft Visual C++ v14 x64 Redistributable**。运行机只需这些运行依赖和例程所用的 Python 库。连接板卡时再按传输方式安装相应驱动。[CPython 3.11.9](https://www.python.org/downloads/release/python-3119/) · [下载 VC++ x64 运行库](https://aka.ms/vc14/vc_redist.x64.exe) · [设备驱动准备](c-api.md#231-准备编译工具和驱动)
-
-在普通 PowerShell 中，把第一行引号内的路径改为实际的例程目录，第二行引号内的路径改为收到的 ZIP 文件路径。选择 USB3 版时使用对应的 ZIP。更换版本前先移出同名旧文件。已有 `.venv-sdk` 时跳过第三行。
-
-```powershell
-Set-Location -LiteralPath 'C:\YunSDR\python_20260213'
-Expand-Archive -LiteralPath 'C:\YunSDR\libyunsdr-26.00.00.1-cp311-win64-pciex-pcies.zip' -DestinationPath .
-py -3.11 -m venv .venv-sdk
-```
-
-确认例程目录中有同一套 `yunsdr_ss_api.py`、`_yunsdr_ss_api.pyd` 和 `libyunsdr_ss.dll`。USB3 版还要有 `libusb-1.0.dll`。如果文件解压在 `bin` 子目录，将它们复制到脚本旁。
-
-在同一目录验证导入，无需设置 `PYTHONPATH`。输出应显示当前目录下的模块路径和 `ticks = 15360`。
-
-```powershell
-& .\.venv-sdk\Scripts\python.exe -E -c "import yunsdr_ss_api as api, _yunsdr_ss_api as ext; print(api.__file__, ext.__file__, sep='\n'); print('ticks =', api.yunsdr_timeNsToTicks(500000, 30720000.0))"
-```
-
-若提示 `DLL load failed`，核对 Python 的位数、VC++ x64 运行库和同目录的 DLL 文件。运行例程时按第 2.3.3 节安装所需的 Python 库并用相对路径启动。[PowerShell 运行例程](#233-在-powershell-运行-python-例程)
-
-#### 2.1.4 使用 MinGW-w64 和 SWIG 构建 Python 绑定
-
-本节适用于交付包 `libyunsdr-26-01-00.1.zip`。实测环境为 Windows x64、MinGW-w64（TDM-GCC 9.2.0）、CMake 4.2.1、SWIG 4.2.1 和 CPython 3.11.9 x64。MinGW 路线无需安装 Visual Studio。解压源码到无空格的路径，打开普通 Windows PowerShell，进入含 `CMakeLists.txt` 的源码根目录。[MinGW-w64、CMake 和 gendef 安装步骤](c-api.md#234-使用-mingw-w64-构建-c-库) · [CPython 3.11.9](https://www.python.org/downloads/release/python-3119/) · [SWIG Windows 预编译包](https://sourceforge.net/projects/swig/files/swigwin/swigwin-4.2.1/swigwin-4.2.1.zip/download)
-
-缺少 `gendef.exe` 时，从本仓库下载 Windows x64 版，放到已加入 `Path` 的 MinGW `bin` 目录。[下载 gendef.exe](https://github.com/lichen813-gif/libyunsdr-docs/releases/download/gendef-win64-14.0.0-r598/gendef.exe)
-
-把第一行 `Set-Location` 引号里的路径改为实际的源码根目录。在 PowerShell 中运行以下命令检查工具。`gcc -dumpmachine` 应输出 `x86_64-w64-mingw32`，SWIG 应来自完整解压的 `swigwin-4.2.1` 目录。
-
-```powershell
-Set-Location -LiteralPath 'C:\YunSDR\libyunsdr-26-01-00.1'
-Get-Command gcc.exe, g++.exe, mingw32-make.exe, gendef.exe, cmake.exe, swig.exe
-gcc -dumpmachine
-swig -version
-py -3.11 --version
-```
-
-**准备 Python 环境。** 在同一窗口运行。源码目录已有 CPython 3.11 x64 的 `.venv-sdk` 时，可跳过第一行。
-
-```powershell
-py -3.11 -m venv .venv-sdk
-$py = (Resolve-Path -LiteralPath .\.venv-sdk\Scripts\python.exe).Path
-$pythonHome = & $py -c "import sys; print(sys.base_prefix)"
-```
-
-**选择后端。** 仅构建 PCIEX 时执行这一组。
-
-```powershell
-$profile = 'pciex'
-$backendArgs = @('-DENABLE_PCIEX=ON', '-DENABLE_USB3=OFF')
-```
-
-要启用 USB3，改用下面这一组。把 `$usb` 改为 libusb 1.0.29 的实际解压目录。命令使用包里的 `libusb-1.0.def`，在 `MinGW64\dll` 下生成 GNU x64 导入库。要同时启用 PCIEX 和 USB3，把 `$profile` 改为 `'pciex-usb3'`，把 `$pciex` 改为 `'ON'`。[libusb Windows 二进制包](https://github.com/libusb/libusb/releases/download/v1.0.29/libusb-1.0.29.7z) · [C API 手册中的 libusb 说明](c-api.md#构建并验证-c-库)
-
-```powershell
-$profile = 'usb3'
-$pciex = 'OFF'
-$usb = 'C:\YunSDR\deps\libusb-1.0.29'
-$usbDllDir = "$usb\MinGW64\dll"
-Get-Command dlltool.exe
-dlltool.exe -m i386:x86-64 -d "$usb\libusb-1.0.def" -D libusb-1.0.dll -l "$usbDllDir\libusb-1.0.lib"
-$backendArgs = @("-DENABLE_PCIEX=$pciex", '-DENABLE_USB3=ON',
-    "-DLIBUSB_HEADER_FILE=$usb\include\libusb.h",
-    "-Dusb_LIBRARY=$usbDllDir\libusb-1.0.lib")
-```
-
-**配置。** 三种配置各自使用独立的构建和安装目录。命令显式指定 MinGW 的 GCC、G++ 和 Make，并用 CMake 3.24 起提供的 `--fresh` 重新生成缓存。
-
-```powershell
-$mingw = Split-Path -Parent (Get-Command gcc.exe).Source
-$buildDir = Join-Path $PWD "build-win64-mingw-python-$profile"
-$prefix = Join-Path $PWD "sdk-win64-mingw-python-$profile"
-$pydDir = Join-Path $buildDir 'swig\python\yunsdr_ss\Release'
-New-Item -ItemType Directory -Force -Path "$prefix\bin" | Out-Null
-cmake --fresh -S . -B $buildDir -G 'MinGW Makefiles' -DCMAKE_BUILD_TYPE=Release `
-  "-DCMAKE_C_COMPILER=$mingw\gcc.exe" "-DCMAKE_CXX_COMPILER=$mingw\g++.exe" `
-  "-DCMAKE_MAKE_PROGRAM=$mingw\mingw32-make.exe" `
-  "-DCMAKE_INSTALL_PREFIX=$prefix" "-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=$pydDir" `
-  "-DPython_EXECUTABLE=$py" "-DPython_ROOT_DIR=$pythonHome" `
-  -DENABLE_PYTHON=ON -DBUILD_PYTHON=ON -DENABLE_EXAMPLE=OFF -DENABLE_COMLABS=OFF `
-  -DENABLE_PCIES=OFF -DENABLE_FIRMWARE=OFF -DENABLE_PCIE=OFF -DENABLE_SFP=OFF @backendArgs
-```
-
-**编译和安装。** 配置日志中 C 和 C++ 编译器应均为 `GNU`。启用 USB3 时还应显示 `libusb version: 1.0.29`。看到 `Generating done` 后再编译，编译成功后再安装。
-
-```powershell
-cmake --build $buildDir --parallel 4
-cmake --install $buildDir
-```
-
-启用 USB3 时，安装成功后再执行这一行，将 libusb 的 DLL 放到 Python 绑定旁。
-
-```powershell
-Copy-Item -LiteralPath "$prefix\lib\libusb-1.0.dll" -Destination "$prefix\bin"
-```
-
-交付包的构建后复制规则会在 `<构建目录>\swig\python\yunsdr_ss\Release` 查找 `_yunsdr_ss_api.pyd`。`MinGW Makefiles` 默认不会给模块输出加上 `Release` 子目录，链接成功后可能在复制时报错。上面的 `CMAKE_LIBRARY_OUTPUT_DIRECTORY` 在配置时把模块写到复制规则期望的绝对路径，随后由该规则复制到安装目录的 `bin`。这项设置无需修改 SDK 源码。[CMake 库输出目录](https://cmake.org/cmake/help/latest/variable/CMAKE_LIBRARY_OUTPUT_DIRECTORY.html)
-
-**导入检查。** 在同一窗口临时进入安装目录的 `bin`，无需设置 `PYTHONPATH`。输出应显示两个模块在该目录中的路径和 `ticks = 15360`。离线检查无需连接板卡。
-
-```powershell
-Push-Location -LiteralPath "$prefix\bin"
-& $py -E -c "import yunsdr_ss_api as api, _yunsdr_ss_api as ext; print(api.__file__, ext.__file__, sep='\n'); print('ticks =', api.yunsdr_timeNsToTicks(500000, 30720000.0))"
-Pop-Location
-```
-
-| 后端配置 | Windows x64 MinGW + SWIG 验证情况 |
-| --- | --- |
-| PCIEX | Release 构建、安装、导入和离线 tick 换算通过 |
-| USB3 | 使用 libusb 1.0.29，Release 构建、安装、导入和离线 tick 换算通过 |
-| PCIEX + USB3 | 同一构建开启两种后端，Release 构建、安装、导入和离线 tick 换算通过 |
-| PCIES | 当前交付包的 C 库依赖未通过 MinGW 链接。CMake 自动选到 Linux `.a`，显式指定 Windows `.lib` 后仍缺少 MSVC 运行库符号。此配置使用 MSVC 路线 |
-
-这些结果覆盖主机离线构建和导入。板卡打开、驱动配套及 I/Q 收发仍需按实际设备联机验证。运行例程时，可将安装目录 `bin` 中的绑定和 DLL 复制到脚本所在目录。[兼容矩阵](compatibility.md) · [PowerShell 运行例程](#233-在-powershell-运行-python-例程)
-
-### 2.2 Linux x86-64 与 AArch64
-
-以下以 Debian/Ubuntu 和 Bash 为例。用 pyenv 安装 CPython 3.11.9，在例程目录创建 `venv311`。安装依赖和运行例程时，直接调用该目录下的 Python，无需激活虚拟环境。
-
-#### 2.2.1 安装 pyenv 并生成 venv311
-
-1. 安装编译 Python 和 SDK 所需的工具与开发库。
-
-   ```bash
-   sudo apt update
-   sudo apt install build-essential cmake swig git curl pkg-config \
-     libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev \
-     libncurses-dev xz-utils tk-dev libffi-dev liblzma-dev
-   ```
-
-2. 将 pyenv 安装到用户目录。已有 pyenv 时，跳过克隆并按实际位置设置 `PYENV_ROOT`。这里只用 `pyenv exec` 选择建环境的解释器。[pyenv 安装说明](https://github.com/pyenv/pyenv#installation)
-
-   ```bash
-   export PYENV_ROOT="$HOME/.pyenv"
-   git clone https://github.com/pyenv/pyenv.git "$PYENV_ROOT"
-   export PATH="$PYENV_ROOT/bin:$PATH"
-   ```
-
-3. 把下面第一行 `cd` 引号里的路径改成实际的例程目录，也就是 `test_cofdm.py` 所在目录。执行后，`venv311` 会与脚本同级。已有该环境时可跳过创建命令。若要复用其他目录中的环境，例如 `/data/python_envs/venv311`，在后续命令中用该环境的绝对路径替换 `./venv311`。
-
-   ```bash
-   cd "$HOME/python_20260213"
-   PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install -s 3.11.9
-   PYENV_VERSION=3.11.9 pyenv exec python -m venv venv311
-   ./venv311/bin/python -m pip install numpy matplotlib ModulationPy
-   ```
-
-#### 2.2.2 用 venv311 构建并导入绑定
-
-把 `cd` 改为含 `CMakeLists.txt` 的 SDK 源码根目录，把 `py` 改为上一步创建的 `venv311/bin/python` 的绝对路径。AArch64 使用匹配主机架构的配套驱动，CMake 会优先查找 `lib/ARM64/` 的静态依赖。
-
-```bash
-cd "$HOME/libyunsdr-26-01-00.1"
-py="$HOME/python_20260213/venv311/bin/python"
-python_home="$("$py" -c 'import sys; print(sys.base_prefix)')"
-build_dir="$PWD/build-linux-python"
-cmake -S . -B "$build_dir" -DCMAKE_BUILD_TYPE=Release \
-  -DPython_EXECUTABLE="$py" -DPython_ROOT_DIR="$python_home" \
-  -DENABLE_PYTHON=ON -DBUILD_PYTHON=ON \
-  -DENABLE_EXAMPLE=OFF -DENABLE_COMLABS=OFF -DENABLE_USB3=OFF \
-  -DENABLE_PCIEX=ON -DENABLE_PCIES=ON -DENABLE_PCIE=OFF -DENABLE_SFP=OFF
-cmake --build "$build_dir" --parallel 4
-export PYTHONPATH="$build_dir/lib"
-export LD_LIBRARY_PATH="$build_dir/lib"
-ldd "$build_dir/lib/_yunsdr_ss_api.so"
-"$py" -c 'import yunsdr_ss_api as api, _yunsdr_ss_api as ext; print(api.__file__); print(ext.__file__)'
-```
-
-检查 CMake 选中的 Python 为 3.11.9 且找到 `Interpreter` 和 `Development`。本包将生成的 `yunsdr_ss_api.py` 和 `_yunsdr_ss_api.so` 复制到 `build-linux-python/lib/`，与 `libyunsdr_ss.so` 一起使用。`ldd` 应解析到该构建的 C 库及系统依赖。启用 USB3 时安装 `libusb-1.0-0-dev`，把 `ENABLE_USB3` 改为 `ON` 并使用独立构建目录。
-
-#### 2.2.3 从 venv311 启动 Spyder 调试
-
-在 Linux 图形桌面的终端进入例程目录。首次使用时执行第一行安装 Spyder。第二行直接用该目录下的 `venv311` 启动 Spyder 并打开例程。[Spyder pip 安装说明](https://docs.spyder-ide.org/current/installation.html#using-pip)
-
-```bash
-./venv311/bin/python -m pip install spyder
-./venv311/bin/spyder --new-instance --workdir . ./test_cofdm.py
-```
-
-在编辑器按 **F5** 运行。在行号栏设置断点后，从「调试」菜单启动调试。若当前内核选择了其他解释器，在「首选项 → Python 解释器」选择 `venv311/bin/python` 的实际路径，再重启内核。其他例程用到 SciPy 时，在该环境中运行 `./venv311/bin/python -m pip install scipy`。[Spyder 调试说明](https://docs.spyder-ide.org/current/panes/debugging.html)
-
-调试调用 libyunsdr 的脚本时，先按第 2.2.4 节放置库文件并设置动态库搜索路径，再从同一终端启动 Spyder。联机前安装对应驱动并配置设备访问权限。[驱动安装](c-api.md#241-准备工具解压源码与核对设备)
-
-#### 2.2.4 在 Bash 运行 Python 例程
-
-在 `venv311` 和脚本所在目录直接执行。离线 OFDM 例程无需启动 Spyder，也无需加载 SDK 或连接设备。
-
-```bash
-./venv311/bin/python ./test_cofdm.py
-```
-
-若脚本调用 libyunsdr，将同一次构建的 `yunsdr_ss_api.py`、`_yunsdr_ss_api.so` 和 `libyunsdr_ss.so` 复制到脚本旁。Python 会从脚本目录导入绑定。为了让 Linux 动态加载器也能找到同目录的 C 库，在启动 Python 或 Spyder 前，从例程目录执行这一行。
-
-```bash
-export LD_LIBRARY_PATH="$PWD${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-```
-
-Linux 原生编译、Spyder 图形调试和联机验证状态见 [兼容矩阵](compatibility.md)。AArch64 上安装 Spyder 还需确认发行版及所选 Python 版本有可用的 Qt 依赖。
-
-### 2.3 Windows 虚拟环境与 Spyder
-
-#### 2.3.1 创建或复用 .venv-sdk
-
-安装 CPython 3.11 x64 并保留 Python Launcher。打开 PowerShell，把第一行 `Set-Location` 单引号里的路径改成实际的例程目录，也就是存放 `test_cofdm.py` 的目录。`.venv-sdk` 会建在该目录下。[CPython 3.11.9 安装包](https://www.python.org/downloads/release/python-3119/)
+安装与包匹配的 64 位 CPython，并保留 Python Launcher。把第一行路径改成实际例程目录。已有匹配的 `.venv-sdk` 时，跳过创建环境的命令。后续用相对路径启动，无需激活。[CPython 3.11.9 x64 安装包](https://www.python.org/downloads/release/python-3119/)
 
 ```powershell
 Set-Location -LiteralPath 'C:\YunSDR\python_20260213'
@@ -324,47 +38,118 @@ py -3.11 -m venv .venv-sdk
 & .\.venv-sdk\Scripts\python.exe -m pip install numpy
 ```
 
-当前目录已有 `.venv-sdk` 时，跳过第二行。后续在同一目录使用相对路径安装依赖和运行脚本，无需激活虚拟环境。
+<a name="213-直接使用预编译包"></a>
 
-#### 2.3.2 安装并启动 Spyder
+#### 2.1.2 解压预编译库并验证导入
 
-在 PowerShell 中进入例程目录，使用与脚本同级的 `.venv-sdk`。如果还没有虚拟环境，先在该目录执行 `py -3.11 -m venv .venv-sdk`。首次调试 `test_cofdm.py` 时，安装 Spyder 和例程依赖。pip 会安装匹配的 `spyder-kernels` 和 Qt 依赖。[Spyder 的 pip 安装说明](https://docs.spyder-ide.org/current/installation.html#using-pip)
+使用 MSVC 预编译包时，按交付说明安装 Microsoft Visual C++ v14 x64 运行库。其他包按随包说明准备运行依赖。[VC++ x64 运行库](https://aka.ms/vc14/vc_redist.x64.exe)
+
+在同一例程目录，把下面的 ZIP 路径替换成实际收到的文件。库若已随例程放好，可直接验证导入。
+
+```powershell
+Expand-Archive -LiteralPath 'C:\YunSDR\libyunsdr-26.00.00.1-cp311-win64-pciex-pcies-usb3.zip' -DestinationPath .
+```
+
+确认脚本同级有 `yunsdr_ss_api.py`、`_yunsdr_ss_api.pyd` 和 `libyunsdr_ss.dll`。USB3 版还需 `libusb-1.0.dll`。如果库解压在子目录，把同一套文件复制到脚本旁。从该目录检查导入，无需设置 `PYTHONPATH`。应看到当前目录下的模块路径和 `ticks = 15360`。
+
+```powershell
+& .\.venv-sdk\Scripts\python.exe -E -c "import yunsdr_ss_api as api, _yunsdr_ss_api as ext; print(api.__file__, ext.__file__, sep='\n'); print('ticks =', api.yunsdr_timeNsToTicks(500000, 30720000.0))"
+```
+
+<a name="232-安装并启动-spyder"></a>
+
+#### 2.1.3 安装并启动 Spyder
+
+在例程目录执行。首次使用时运行第一行安装 Spyder 和 `test_cofdm.py` 所需的库。第二行打开一个新实例，将工作目录设为当前目录。[Spyder 的 pip 安装说明](https://docs.spyder-ide.org/current/installation.html#using-pip)
 
 ```powershell
 & .\.venv-sdk\Scripts\python.exe -m pip install spyder numpy matplotlib ModulationPy
-```
-
-若 pip 镜像无法连接，可在安装命令的 `install` 后加上 `--index-url https://pypi.org/simple`。
-
-在同一目录执行以下命令。Spyder 会打开一个新实例，使用当前目录作为工作目录，并打开 `test_cofdm.py`。
-
-```powershell
 & .\.venv-sdk\Scripts\spyder.exe --new-instance --workdir . .\test_cofdm.py
 ```
 
-在编辑器按 **F5** 运行。若工作目录被运行配置改动，在「运行 → 每个文件的配置」中将它设为脚本所在目录。`test_cofdm.py` 可以离线运行。若调试调用 libyunsdr 的脚本，按第 2.3.3 节将同一套 `.py`、`.pyd` 和 DLL 放在脚本旁，无需设置 `PYTHONPATH`。[Spyder 运行配置](https://docs.spyder-ide.org/current/panes/editor.html#run-configuration)
+在编辑器按 **F5** 运行，或设置断点后从「调试」菜单启动。调试调用 libyunsdr 的程序前，先按第 2.1.2 节放好库文件并验证导入。若控制台使用了其他解释器，在「首选项 → Python 解释器」选实际的 `.venv-sdk\Scripts\python.exe`，然后重启内核。[Spyder 解释器配置](https://docs.spyder-ide.org/current/faq.html)
 
-若控制台使用了其他解释器，在「首选项 → Python 解释器」选择例程目录下的 `.venv-sdk\Scripts\python.exe`，然后重启内核。先前单独安装的 Spyder 若提示需要匹配版本的 `spyder-kernels`，按提示将它安装到该虚拟环境。[Spyder 解释器配置](https://docs.spyder-ide.org/current/faq.html)
+<a name="233-在-powershell-运行-python-例程"></a>
 
-#### 2.3.3 在 PowerShell 运行 Python 例程
+#### 2.1.4 在 PowerShell 运行 Python 例程
 
-在 PowerShell 中进入包含 `test_cofdm.py`、`cofdm_tx.py` 和 `cofdm_rx.py` 的例程目录。以下命令使用与脚本同级的 `.venv-sdk`。如果当前目录还没有虚拟环境，先执行 `py -3.11 -m venv .venv-sdk`。
-
-首次运行时安装例程依赖。
+在 `.venv-sdk` 和脚本所在目录运行。首次使用时安装例程依赖。
 
 ```powershell
 & .\.venv-sdk\Scripts\python.exe -m pip install numpy matplotlib ModulationPy
-```
-
-依赖装好后，直接用相对路径运行脚本，无需激活虚拟环境或启动 Spyder。
-
-```powershell
 & .\.venv-sdk\Scripts\python.exe .\test_cofdm.py
 ```
 
-`test_cofdm.py` 是离线仿真，无需复制 SDK 文件或连接板卡。脚本会在当前目录写入或覆盖 `rf_data.bin`，关闭 Matplotlib 图窗后，终端会打印 EVM 和频偏等结果。[OFDM 结果示例](#73-测试截图)
+`test_cofdm.py` 是离线仿真。脚本会在当前目录写入或覆盖 `rf_data.bin`，关闭 Matplotlib 图窗后，终端会打印 EVM 和频偏等结果。运行联机例程时，先按第 2.1.2 节放好库，再替换命令中的脚本名。[OFDM 结果示例](#73-测试截图)
 
-运行其他例程时，替换命令中的脚本名。如果脚本调用 libyunsdr，把同一次构建或同一预编译包中的 `yunsdr_ss_api.py`、`_yunsdr_ss_api.pyd` 和 `libyunsdr_ss.dll` 复制到脚本旁。USB3 版同时复制 `libusb-1.0.dll`。文件放在脚本旁即可直接导入，无需设置 `PYTHONPATH`。
+### 2.2 Linux x86-64 与 AArch64
+
+以下以 Debian/Ubuntu 和 Bash 为例。用 `uname -m` 核对架构。以下例程目录为 `$HOME/python_20260213`，运行前按实际路径修改。
+
+#### 2.2.1 安装 pyenv 并生成 venv311
+
+1. 使用 pyenv 安装 CPython 时，先准备 Python 自身所需的构建依赖。已装有匹配的 CPython 3.11 时，可直接在例程目录执行 `python3.11 -m venv venv311`，再安装例程依赖。
+
+   ```bash
+   sudo apt update
+   sudo apt install build-essential git curl \
+     libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev \
+     libncurses-dev xz-utils tk-dev libffi-dev liblzma-dev
+   ```
+
+2. 将 pyenv 安装到用户目录。已有 pyenv 时，跳过克隆并按实际位置设置 `PYENV_ROOT`。[pyenv 安装说明](https://github.com/pyenv/pyenv#installation)
+
+   ```bash
+   export PYENV_ROOT="$HOME/.pyenv"
+   git clone https://github.com/pyenv/pyenv.git "$PYENV_ROOT"
+   export PATH="$PYENV_ROOT/bin:$PATH"
+   ```
+
+3. 在例程目录创建 `venv311`。收到其他 CPython 版本的绑定时，替换下面的 Python 版本，并用对应环境的路径运行后续命令。
+
+   ```bash
+   cd "$HOME/python_20260213"
+   pyenv install -s 3.11.9
+   PYENV_VERSION=3.11.9 pyenv exec python -m venv venv311
+   ./venv311/bin/python -m pip install numpy matplotlib ModulationPy
+   ```
+
+#### 2.2.2 放置预编译库并验证导入
+
+在例程目录，把同一个预编译包中的 `yunsdr_ss_api.py`、`_yunsdr_ss_api.so` 和 `libyunsdr_ss.so` 放到脚本旁。收到独立的 `.tar.gz` 时，可用下面的命令解压。把文件名换成实际交付包，AArch64 使用对应架构的文件。
+
+```bash
+tar -xzf "$HOME/libyunsdr-26.00.00.1-cp311-linux-x86_64-pciex-pcies-usb3.tar.gz" -C .
+```
+
+USB3 包依赖系统 libusb 时，在 Debian/Ubuntu 上安装 `libusb-1.0-0`。在当前终端设置动态库搜索路径，再检查依赖与导入。`ldd` 应能找到同目录的 `libyunsdr_ss.so`，导入检查应显示当前目录的两个模块路径并输出 `ticks = 15360`。
+
+```bash
+export LD_LIBRARY_PATH="$PWD${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+ldd ./_yunsdr_ss_api.so
+./venv311/bin/python -E -c "import yunsdr_ss_api as api, _yunsdr_ss_api as ext; print(api.__file__, ext.__file__, sep='\n'); print('ticks =', api.yunsdr_timeNsToTicks(500000, 30720000.0))"
+```
+
+#### 2.2.3 从 venv311 启动 Spyder 调试
+
+在 Linux 图形桌面的终端进入例程目录。首次使用时安装 Spyder，再启动并打开例程。[Spyder 的 pip 安装说明](https://docs.spyder-ide.org/current/installation.html#using-pip)
+
+```bash
+./venv311/bin/python -m pip install spyder
+./venv311/bin/spyder --new-instance --workdir . ./test_cofdm.py
+```
+
+在编辑器按 **F5** 运行。在行号栏设置断点后，从「调试」菜单启动调试。若内核选择了其他解释器，在「首选项 → Python 解释器」选择 `venv311/bin/python` 的实际路径，再重启内核。其他例程用到 SciPy 时，执行 `./venv311/bin/python -m pip install scipy`。[Spyder 调试说明](https://docs.spyder-ide.org/current/panes/debugging.html)
+
+调试联机例程时，先按第 2.2.2 节放置库文件并设置 `LD_LIBRARY_PATH`，再在同一终端启动 Spyder。AArch64 图形调试需要有匹配的 Qt 依赖。[Linux 驱动和设备访问](c-api.md#241-准备工具解压源码与核对设备)
+
+#### 2.2.4 在 Bash 运行 Python 例程
+
+在 `venv311` 和脚本所在目录直接执行。离线 OFDM 无需加载 SDK 或连接设备。运行联机例程时，先按第 2.2.2 节准备绑定和库路径，再替换脚本名。
+
+```bash
+./venv311/bin/python ./test_cofdm.py
+```
 
 ## 3. Python 调用约定
 
@@ -443,7 +228,7 @@ if __name__ == "__main__":
     main()
 ```
 
-在例程目录运行。Windows 按第 2.3.1 和 2.3.3 节准备 `.venv-sdk`、NumPy 和同目录的 SDK 文件。Linux 沿用第 2.2.2 节设置的解释器和库路径。按机型改用 `pcies:0.0` 或 `usb3:0` 时，确认加载的构建启用了该后端。若输出文件已存在，改用另一个文件名或先移走旧文件。
+在例程目录运行。Windows 按第 2.1 节准备 `.venv-sdk`、NumPy 和预编译库。Linux 按第 2.2 节准备 `venv311`、预编译库和动态库搜索路径。按机型改用 `pcies:0.0` 或 `usb3:0` 时，确认预编译包启用了该后端。若输出文件已存在，改用另一个文件名或先移走旧文件。
 
 ```powershell
 & .\.venv-sdk\Scripts\python.exe .\rx_once.py 'pciex:0' --count 30720 --output rx_ch1.iq16
@@ -451,7 +236,7 @@ if __name__ == "__main__":
 ```
 
 ```bash
-"$py" ./rx_once.py 'pciex:0' --count 30720 --output rx_ch1.iq16
+./venv311/bin/python ./rx_once.py 'pciex:0' --count 30720 --output rx_ch1.iq16
 wc -c < rx_ch1.iq16
 ```
 
@@ -565,9 +350,9 @@ print(offset_hz, amplitude_dbfs, phase_deg)
 
 ### 7.2 运行配套例程
 
-另配包的主要入口是 `yunsdr_tx_rxcyclic.py`（循环收发）、`yunsdr_tx.py`（独立发送）、`test_cofdm.py`（离线 OFDM）、`coeff_calc.py` / `config_coeff.py`（生成和应用相位补偿）、`disable_coeff.py`（关闭或清除补偿）及 `calib_from_gps.py`（设备支持时的参考校准）。先用对应参考包的模块和脚本组合运行。在需要使用本指南编译的 SWIG 绑定时，确认脚本目录中没有会覆盖导入路径的同名旧 `.py`、`.pyd` 或 `.so`，用 `api.__file__` 验证。
+另配包的主要入口是 `yunsdr_tx_rxcyclic.py`（循环收发）、`yunsdr_tx.py`（独立发送）、`test_cofdm.py`（离线 OFDM）、`coeff_calc.py` / `config_coeff.py`（生成和应用相位补偿）、`disable_coeff.py`（关闭或清除补偿）及 `calib_from_gps.py`（设备支持时的参考校准）。使用与脚本配套的预编译包。替换版本后，用 `api.__file__` 核对实际导入的模块路径。
 
-解压例程包并切换到包含 `test_cofdm.py` 的目录。离线验证通过后，再在联机脚本中设置设备地址、射频类型、目标频点、采样率、每路块长和通道掩码。[Windows PowerShell 运行步骤](#233-在-powershell-运行-python-例程) · [Linux Bash 运行步骤](#224-在-bash-运行-python-例程)
+解压例程包并切换到包含 `test_cofdm.py` 的目录。离线验证通过后，再在联机脚本中设置设备地址、射频类型、目标频点、采样率、每路块长和通道掩码。[Windows PowerShell 运行步骤](#214-在-powershell-运行-python-例程) · [Linux Bash 运行步骤](#224-在-bash-运行-python-例程)
 
 使用配套脚本校准接收相位时，在循环收发例程中选择单音并将相位差保存到 `data/`。在 `coeff_calc.py` 设定同一频点，生成相应的补偿文件。随后在 `config_coeff.py` 选择该频点的两份系数文件并运行。重新收取同源单音，验证与参考通道的相位差，再把已验证的参数纳入应用启动流程。
 
@@ -607,10 +392,10 @@ print(offset_hz, amplitude_dbfs, phase_deg)
 
 | 现象 | 排查方法 |
 | --- | --- |
-| `No module named 'yunsdr_ss_api'` | 检查是否使用例程虚拟环境。确认 `yunsdr_ss_api.py` 和生成的扩展在脚本目录中，或在当前 `PYTHONPATH` 指定的 SDK 目录中 |
-| Windows `DLL load failed` 或 Linux `cannot open shared object file` | 检查 Python 版本和位数、生成扩展的路径与同版 `libyunsdr_ss`。USB3 检查 libusb 动态库。Linux 在测试终端用 `ldd` 核对 |
+| `No module named 'yunsdr_ss_api'` | 检查是否使用例程虚拟环境。确认 `yunsdr_ss_api.py` 和预编译扩展都在脚本目录中 |
+| Windows `DLL load failed` 或 Linux `cannot open shared object file` | 检查 CPython 主次版本、系统架构和扩展旁的同版 `libyunsdr_ss`。USB3 检查 libusb 动态库。Linux 在测试终端用 `ldd` 核对 |
 | Spyder 中的解释器或 SDK 路径与终端不同 | Windows 使用脚本目录的 `.venv-sdk`，Linux 使用 `venv311`。联机脚本还需核对同目录的 SDK 文件，Linux 需设置 `LD_LIBRARY_PATH`。用 `sys.executable` 和 `api.__file__` 检查实际路径，调整解释器后重启内核 |
 | Linux 的 Spyder 图窗打不开 | 检查当前会话是否有图形桌面，再核对 Qt 图形后端选择。若启动终端提示 Qt 平台插件加载失败，按报错检查发行版的系统图形依赖 |
-| `None` 句柄或设备打开失败 | 核对地址前缀、CMake 实际启用的后端、主机驱动和访问权限。先用 [基础 C 测试](c-api.md#43-基础测试程序) 验证同一设备 |
+| `None` 句柄或设备打开失败 | 核对地址前缀、预编译包启用的后端、主机驱动和访问权限。先用 [基础 C 测试](c-api.md#43-基础测试程序) 验证同一设备 |
 | 样点数异常、通道错位 | 检查掩码、数组的 `int16` 类型与连续性，以及每路点数。`0x5` 需要两个连续的通道块，按掩码置位顺序存放 |
 | 频谱频点或相位不符 | 确认 RX 实际采样率、I/Q 顺序、中心频率、参考时钟和同源回环。检查信号是否过载或输入太弱 |
