@@ -165,29 +165,40 @@ $profile = 'pciex'
 $backendArgs = @('-DENABLE_PCIEX=ON', '-DENABLE_USB3=OFF')
 ```
 
-要启用 USB3，改用下面这一组。把 `$usb` 单引号里的路径改为 libusb 1.0.29 的实际解压目录。仅用 USB3 时保留前两行的值。要同时启用 PCIEX 和 USB3，把 `$profile` 改为 `'pciex-usb3'`，把 `$pciex` 改为 `'ON'`。[libusb Windows 二进制包](https://github.com/libusb/libusb/releases/download/v1.0.29/libusb-1.0.29.7z)
+要启用 USB3，改用下面这一组。把 `$usb` 改为 libusb 1.0.29 的实际解压目录。命令使用包里的 `libusb-1.0.def`，在 `MinGW64\dll` 下生成 GNU x64 导入库。要同时启用 PCIEX 和 USB3，把 `$profile` 改为 `'pciex-usb3'`，把 `$pciex` 改为 `'ON'`。[libusb Windows 二进制包](https://github.com/libusb/libusb/releases/download/v1.0.29/libusb-1.0.29.7z) · [C API 手册中的 libusb 说明](c-api.md#构建并验证-c-库)
 
 ```powershell
 $profile = 'usb3'
 $pciex = 'OFF'
 $usb = 'C:\YunSDR\deps\libusb-1.0.29'
+$usbDllDir = "$usb\MinGW64\dll"
+Get-Command dlltool.exe
+dlltool.exe -m i386:x86-64 -d "$usb\libusb-1.0.def" -D libusb-1.0.dll -l "$usbDllDir\libusb-1.0.lib"
 $backendArgs = @("-DENABLE_PCIEX=$pciex", '-DENABLE_USB3=ON',
     "-DLIBUSB_HEADER_FILE=$usb\include\libusb.h",
-    "-Dusb_LIBRARY=$usb\VS2019\MS64\dll\libusb-1.0.dll")
+    "-Dusb_LIBRARY=$usbDllDir\libusb-1.0.lib")
 ```
 
-**配置、编译和安装。** 三种配置共用下面的命令，各自使用独立的构建和安装目录。配置成功后再编译，编译成功后再安装。
+**配置。** 三种配置各自使用独立的构建和安装目录。命令显式指定 MinGW 的 GCC、G++ 和 Make，并用 CMake 3.24 起提供的 `--fresh` 重新生成缓存。
 
 ```powershell
+$mingw = Split-Path -Parent (Get-Command gcc.exe).Source
 $buildDir = Join-Path $PWD "build-win64-mingw-python-$profile"
 $prefix = Join-Path $PWD "sdk-win64-mingw-python-$profile"
 $pydDir = Join-Path $buildDir 'swig\python\yunsdr_ss\Release'
 New-Item -ItemType Directory -Force -Path "$prefix\bin" | Out-Null
-cmake -S . -B $buildDir -G 'MinGW Makefiles' -DCMAKE_BUILD_TYPE=Release `
+cmake --fresh -S . -B $buildDir -G 'MinGW Makefiles' -DCMAKE_BUILD_TYPE=Release `
+  "-DCMAKE_C_COMPILER=$mingw\gcc.exe" "-DCMAKE_CXX_COMPILER=$mingw\g++.exe" `
+  "-DCMAKE_MAKE_PROGRAM=$mingw\mingw32-make.exe" `
   "-DCMAKE_INSTALL_PREFIX=$prefix" "-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=$pydDir" `
   "-DPython_EXECUTABLE=$py" "-DPython_ROOT_DIR=$pythonHome" `
   -DENABLE_PYTHON=ON -DBUILD_PYTHON=ON -DENABLE_EXAMPLE=OFF -DENABLE_COMLABS=OFF `
   -DENABLE_PCIES=OFF -DENABLE_FIRMWARE=OFF -DENABLE_PCIE=OFF -DENABLE_SFP=OFF @backendArgs
+```
+
+**编译和安装。** 配置日志中 C 和 C++ 编译器应均为 `GNU`。启用 USB3 时还应显示 `libusb version: 1.0.29`。看到 `Generating done` 后再编译，编译成功后再安装。
+
+```powershell
 cmake --build $buildDir --parallel 4
 cmake --install $buildDir
 ```

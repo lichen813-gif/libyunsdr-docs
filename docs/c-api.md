@@ -117,13 +117,13 @@ cmake --install build-win64-usb --config Release
 
 此路线无需 Visual Studio。实测环境为 Windows x64、TDM-GCC 9.2.0（`x86_64-w64-mingw32`）、CMake 4.2.1 和 `gendef`。交付包的 PCIEX、USB3、PCIEX + USB3 三种 Release 配置均通过构建、安装和 C 客户端动态链接验证。[兼容矩阵](compatibility.md)
 
-**准备工具。** 安装 MinGW-w64 x64 工具链和 Windows CMake。工具链需包含 `gcc.exe`、`g++.exe` 和 `mingw32-make.exe`。当前交付源码用 MinGW 构建 DLL 时，需要 `gendef.exe` 生成 `libyunsdr_ss.def`。MSVC 构建和运行预编译包均无需 `gendef`。[TDM-GCC 9.2.0 x64 安装程序](https://github.com/jmeubank/tdm-gcc/releases/download/v9.2.0-tdm64-1/tdm64-gcc-9.2.0.exe) · [CMake 下载](https://cmake.org/download/)
+**准备工具。** 安装 MinGW-w64 x64 工具链和 CMake 3.24 或更新版本。工具链需包含 `gcc.exe`、`g++.exe` 和 `mingw32-make.exe`，启用 USB3 时还需 `dlltool.exe`。当前交付源码用 MinGW 构建 DLL 时，需要 `gendef.exe` 生成 `libyunsdr_ss.def`。MSVC 构建和运行预编译包均无需 `gendef`。[TDM-GCC 9.2.0 x64 安装程序](https://github.com/jmeubank/tdm-gcc/releases/download/v9.2.0-tdm64-1/tdm64-gcc-9.2.0.exe) · [CMake 下载](https://cmake.org/download/)
 
 ##### 安装 gendef
 
 从仓库的 GitHub Releases 下载 Windows x64 版 `gendef.exe`，放到已加入 `Path` 的 MinGW `bin` 目录，例如 `C:\TDM-GCC-64\bin`。如果刚修改过 `Path`，先重新打开 PowerShell。[下载 gendef.exe](https://github.com/lichen813-gif/libyunsdr-docs/releases/download/gendef-win64-14.0.0-r598/gendef.exe) · [来源、源码和许可证](https://github.com/lichen813-gif/libyunsdr-docs/releases/tag/gendef-win64-14.0.0-r598)
 
-运行以下命令检查构建工具。`Get-Command` 应显示 MinGW `bin` 下的 `gendef.exe`，`gcc -dumpmachine` 应输出 `x86_64-w64-mingw32`。本节使用 `MinGW Makefiles` 生成器。[CMake 生成器说明](https://cmake.org/cmake/help/latest/generator/MinGW%20Makefiles.html)
+在普通 PowerShell 中运行以下命令。`Get-Command` 应显示同一个 MinGW `bin` 下的 `gcc.exe`、`g++.exe`、`mingw32-make.exe` 和 `gendef.exe`。`gcc -dumpmachine` 应输出 `x86_64-w64-mingw32`。
 
 ```powershell
 Get-Command gcc.exe, g++.exe, mingw32-make.exe, gendef.exe, cmake.exe
@@ -145,26 +145,41 @@ $profile = 'pciex'
 $backendArgs = @('-DENABLE_PCIEX=ON', '-DENABLE_USB3=OFF')
 ```
 
-要启用 USB3，改用下面这一组。把 `$usb` 改为 libusb 1.0.29 的实际解压目录。要同时启用 PCIEX 和 USB3，把 `$profile` 改为 `'pciex-usb3'`，把 `$pciex` 改为 `'ON'`。[libusb Windows 二进制包](https://github.com/libusb/libusb/releases/download/v1.0.29/libusb-1.0.29.7z)
+要启用 USB3，改用下面这一组。把 `$usb` 改为 libusb 1.0.29 的实际解压目录。命令使用包里的 `libusb-1.0.def`，在 `MinGW64\dll` 下生成 GNU x64 导入库。要同时启用 PCIEX 和 USB3，把 `$profile` 改为 `'pciex-usb3'`，把 `$pciex` 改为 `'ON'`。[libusb Windows 二进制包](https://github.com/libusb/libusb/releases/download/v1.0.29/libusb-1.0.29.7z)
 
 ```powershell
 $profile = 'usb3'
 $pciex = 'OFF'
 $usb = 'C:\YunSDR\deps\libusb-1.0.29'
+$usbDllDir = "$usb\MinGW64\dll"
+Get-Command dlltool.exe
+dlltool.exe -m i386:x86-64 -d "$usb\libusb-1.0.def" -D libusb-1.0.dll -l "$usbDllDir\libusb-1.0.lib"
 $backendArgs = @("-DENABLE_PCIEX=$pciex", '-DENABLE_USB3=ON',
     "-DLIBUSB_HEADER_FILE=$usb\include\libusb.h",
-    "-Dusb_LIBRARY=$usb\VS2019\MS64\dll\libusb-1.0.dll")
+    "-Dusb_LIBRARY=$usbDllDir\libusb-1.0.lib")
 ```
 
-**配置、编译和安装。** 选好后端后运行以下命令。每种配置使用各自的构建和安装目录。
+libusb 1.0.29 的 MinGW x64 DLL 内部登记的导出库名与文件名不同，直接链接 DLL 会让 Windows 启动时查找另一个文件名。生成的 GNU 导入库显式指定运行时文件名为 `libusb-1.0.dll`，并使用 `.lib` 后缀，便于交付包的 CMake 版本检查定位同目录 DLL。
+
+**配置。** 选好后端后运行以下命令。脚本从 `Path` 找到 MinGW 的 `bin`，将其中的 GCC、G++ 和 Make 显式传给 CMake。`--fresh` 会重新生成 CMake 缓存，适用于同一构建目录曾选中 `cl.exe` 的情况。[CMake 配置选项](https://cmake.org/cmake/help/latest/manual/cmake.1.html#cmdoption-cmake-fresh)
+
+如果已有的 CMake 低于 3.24，去掉 `--fresh`，把 `$buildDir` 改为新的目录名。
 
 ```powershell
+$mingw = Split-Path -Parent (Get-Command gcc.exe).Source
 $buildDir = "build-win64-mingw-$profile"
 $prefix = "$PWD\sdk-win64-mingw-$profile"
-cmake -S . -B $buildDir -G 'MinGW Makefiles' -DCMAKE_BUILD_TYPE=Release `
+cmake --fresh -S . -B $buildDir -G 'MinGW Makefiles' -DCMAKE_BUILD_TYPE=Release `
+  "-DCMAKE_C_COMPILER=$mingw\gcc.exe" "-DCMAKE_CXX_COMPILER=$mingw\g++.exe" `
+  "-DCMAKE_MAKE_PROGRAM=$mingw\mingw32-make.exe" `
   "-DCMAKE_INSTALL_PREFIX=$prefix" -DENABLE_PCIES=OFF -DENABLE_FIRMWARE=OFF `
   -DENABLE_PCIE=OFF -DENABLE_SFP=OFF -DENABLE_EXAMPLE=OFF `
   -DENABLE_COMLABS=OFF -DENABLE_PYTHON=OFF @backendArgs
+```
+
+**编译和安装。** 配置日志中 C 和 C++ 编译器应均为 `GNU`。启用 USB3 时还应显示 `libusb version: 1.0.29`。看到 `Generating done` 后再编译，编译成功后再安装。如果日志在 `Hostx86/x86/cl.exe` 下显示 `Failed to load` 和 `Detected version: 0.0.0`，32 位检测程序无法加载 x64 DLL，按上面的命令重新配置。
+
+```powershell
 cmake --build $buildDir --parallel 4
 cmake --install $buildDir
 ```
