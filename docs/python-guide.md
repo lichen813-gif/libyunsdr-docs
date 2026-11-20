@@ -40,21 +40,18 @@ py -3.11 -m venv .venv-sdk
 
 <a name="213-直接使用预编译包"></a>
 
-#### 2.1.2 解压预编译库并验证导入
+<a name="212-解压预编译库并验证导入"></a>
 
-使用 MSVC 预编译包时，按交付说明安装 Microsoft Visual C++ v14 x64 运行库。其他包按随包说明准备运行依赖。[VC++ x64 运行库](https://aka.ms/vc14/vc_redist.x64.exe)
+#### 2.1.2 手动复制预编译库
 
-在同一例程目录，把下面的 ZIP 路径替换成实际收到的文件。库若已随例程放好，可直接验证导入。
+从与 CPython 版本和架构匹配的预编译包中，将以下文件复制到要运行的 `.py` 脚本所在目录，例如 `C:\YunSDR\python_20260213`。
 
-```powershell
-Expand-Archive -LiteralPath 'C:\YunSDR\libyunsdr-26.00.00.1-cp311-win64-pciex-pcies-usb3.zip' -DestinationPath .
-```
+- `yunsdr_ss_api.py`
+- `_yunsdr_ss_api.pyd`
+- `libyunsdr_ss.dll`
+- `libusb-1.0.dll`（USB3 版需要）
 
-确认脚本同级有 `yunsdr_ss_api.py`、`_yunsdr_ss_api.pyd` 和 `libyunsdr_ss.dll`。USB3 版还需 `libusb-1.0.dll`。如果库解压在子目录，把同一套文件复制到脚本旁。从该目录检查导入，无需设置 `PYTHONPATH`。应看到当前目录下的模块路径和 `ticks = 15360`。
-
-```powershell
-& .\.venv-sdk\Scripts\python.exe -E -c "import yunsdr_ss_api as api, _yunsdr_ss_api as ext; print(api.__file__, ext.__file__, sep='\n'); print('ticks =', api.yunsdr_timeNsToTicks(500000, 30720000.0))"
-```
+文件随例程交付且已放在脚本旁时，直接用第 2.1.3 或 2.1.4 节的方式运行。使用 MSVC 预编译包时，按交付说明安装 Microsoft Visual C++ v14 x64 运行库。[VC++ x64 运行库](https://aka.ms/vc14/vc_redist.x64.exe)
 
 <a name="232-安装并启动-spyder"></a>
 
@@ -67,7 +64,7 @@ Expand-Archive -LiteralPath 'C:\YunSDR\libyunsdr-26.00.00.1-cp311-win64-pciex-pc
 & .\.venv-sdk\Scripts\spyder.exe --new-instance --workdir . .\test_cofdm.py
 ```
 
-在编辑器按 **F5** 运行，或设置断点后从「调试」菜单启动。调试调用 libyunsdr 的程序前，先按第 2.1.2 节放好库文件并验证导入。若控制台使用了其他解释器，在「首选项 → Python 解释器」选实际的 `.venv-sdk\Scripts\python.exe`，然后重启内核。[Spyder 解释器配置](https://docs.spyder-ide.org/current/faq.html)
+在编辑器按 **F5** 运行，或设置断点后从「调试」菜单启动。调试调用 libyunsdr 的程序前，先按第 2.1.2 节把库文件复制到脚本旁。若控制台使用了其他解释器，在「首选项 → Python 解释器」选实际的 `.venv-sdk\Scripts\python.exe`，然后重启内核。[Spyder 解释器配置](https://docs.spyder-ide.org/current/faq.html)
 
 <a name="233-在-powershell-运行-python-例程"></a>
 
