@@ -12,7 +12,7 @@
 | ZIP SHA-256 | `e8f31e95222e291a33cfc1fa5de707bc9867878b20dac0e21628f0e04a55e55a` |
 | SDK 版本来源 | `cmake/modules/YunSDRVersion.cmake` 生成 `version.h` 中的 `YUNSDR_VERSION_STRING`，值为 `26.00.00.1`。设备打开时打印同一版本 |
 | API 与例程来源 | `src/yunsdr_ss/include/yunsdr_api_ss.h`、`src/yunsdr_ss/src/`、`src/yunsdr_ss/tests/`、`src/yunsdr_ss/example/` |
-| 已包含的依赖 | Windows x64 的 `lib/libpcies.lib` 和 `lib/libfirmware.lib`，Linux x86-64 的 `lib/*.a`，Linux AArch64 的 `lib/ARM64/*.a` |
+| 已包含的依赖 | `libpcies` 和 RFIC 配置库 `libfirmware`。Windows x64 使用 `lib/` 中的 `.lib`，Linux x86-64 使用 `lib/` 中的 `.a`，Linux AArch64 使用 `lib/ARM64/` 中的 `.a` |
 | 随设备获取 | 配套驱动、FPGA 镜像及固件。ZIP 内的历史 DLL 和 SO 位于旧例程目录，按本包源码重新构建应用所用库 |
 | 公开代码 | 检查时公开分支 `2026.2`（提交 `efcbf9a7cc46ed70310dfe3687b901917fbfaf6d`）的公共头文件与 ZIP 有差异。公开仓库未找到对应标签或 Release，ZIP 对应源码提交待确认 |
 
@@ -44,9 +44,9 @@ Windows ARM64、32 位主机和 macOS 的构建组合待确认。
 | `ENABLE_USB3` | ON | 配置需要 libusb。仅编译 PCIEX/PCIES 时显式设为 OFF |
 | `ENABLE_EXAMPLE` | OFF | 控制 `src/yunsdr_ss/example/` 下的扩展示例。三项基础测试由 `tests/` 构建，开关为 OFF 时仍会生成 |
 | `ENABLE_COMLABS` | OFF | 在 `tests/` 加入 FM 和视频程序。相位校正目标还需要 `ENABLE_EXAMPLE=ON` |
-| `ENABLE_FIRMWARE` | ON | 启用配套固件支持。仅构建 USB3 时关闭此项，见 2.3.3 |
+| `ENABLE_FIRMWARE` | ON | 启用 RFIC 配置库 `libfirmware`。仅构建 USB3 时关闭此项，见 2.3.3 |
 
-| 手册默认构建配置 | PCIEX | PCIES | USB3 | 固件更新（`libfirmware`） |
+| 手册默认构建配置 | PCIEX | PCIES | USB3 | RFIC 配置库（`libfirmware`） |
 | --- | --- | --- | --- | --- |
 | Windows x64 MSVC | ON | ON | ON | ON |
 | Windows x64 MinGW-w64 | ON | OFF | ON | OFF |
@@ -54,7 +54,7 @@ Windows ARM64、32 位主机和 macOS 的构建组合待确认。
 
 ### 2.3 Windows x64
 
-需要 PCIES 或固件更新时，使用第 2.3.1 至 2.3.3 节的 MSVC 路线。只需 PCIEX、USB3 或这两种后端时，也可从 [MinGW-w64 构建](#234-使用-mingw-w64-构建-c-库) 开始。联机驱动按第 2.3.1 节第 3、4 步准备。
+需要 PCIES 或 RFIC 配置库时，使用第 2.3.1 至 2.3.3 节的 MSVC 路线。只需 PCIEX、USB3 或这两种后端时，也可从 [MinGW-w64 构建](#234-使用-mingw-w64-构建-c-库) 开始。联机驱动按第 2.3.1 节第 3、4 步准备。
 
 #### 2.3.1 准备编译工具和驱动
 
@@ -65,7 +65,7 @@ Windows ARM64、32 位主机和 macOS 的构建组合待确认。
 
 #### 2.3.2 配置、编译和安装
 
-默认同时启用 PCIEX、PCIES、USB3 和固件更新支持。把第一行改成含 `CMakeLists.txt` 的源码根目录，路径不应包含空格。把 `$usb` 改成 libusb 1.0.29 的实际解压目录。使用 VS2022 Build Tools 的 v143 时，把 `$generator` 改为 `'Visual Studio 17 2022'`，把 `$toolset` 改为 `'v143'`，把 `$usbVs` 改为 `'VS2022'`。用 VS2022 的 v142 时，仅更改生成器，并使用新的构建目录。[下载 libusb 1.0.29 Windows 二进制包](https://github.com/libusb/libusb/releases/download/v1.0.29/libusb-1.0.29.7z)
+默认同时启用 PCIEX、PCIES、USB3 和 RFIC 配置库。把第一行改成含 `CMakeLists.txt` 的源码根目录，路径不应包含空格。把 `$usb` 改成 libusb 1.0.29 的实际解压目录。使用 VS2022 Build Tools 的 v143 时，把 `$generator` 改为 `'Visual Studio 17 2022'`，把 `$toolset` 改为 `'v143'`，把 `$usbVs` 改为 `'VS2022'`。用 VS2022 的 v142 时，仅更改生成器，并使用新的构建目录。[下载 libusb 1.0.29 Windows 二进制包](https://github.com/libusb/libusb/releases/download/v1.0.29/libusb-1.0.29.7z)
 
 ```powershell
 Set-Location -LiteralPath 'C:\YunSDR\libyunsdr-26-01-00.1'
@@ -120,8 +120,8 @@ Select-String -Path .\sdk-win64\include\version.h -Pattern '^#define YUNSDR_VERS
 
 | 用途 | 在第 2.3.2 节修改 |
 | --- | --- |
-| 仅 PCIEX、PCIES 和固件更新 | 设置 `$usbArgs = @('-DENABLE_USB3=OFF')` |
-| 仅 USB3 | 保留默认的 `$usbArgs`，在 CMake 命令中将 `ENABLE_PCIEX`、`ENABLE_PCIES` 和 `ENABLE_FIRMWARE` 都设为 `OFF`。本包的固件更新入口有 PCIES 链接依赖 |
+| 仅 PCIEX、PCIES 和 RFIC 配置库 | 设置 `$usbArgs = @('-DENABLE_USB3=OFF')` |
+| 仅 USB3 | 保留默认的 `$usbArgs`，在 CMake 命令中将 `ENABLE_PCIEX`、`ENABLE_PCIES` 和 `ENABLE_FIRMWARE` 都设为 `OFF`。本交付包启用 `ENABLE_FIRMWARE` 时会引用 PCIES 库中的符号 |
 
 #### 2.3.4 使用 MinGW-w64 构建 C 库
 
@@ -222,7 +222,7 @@ gcc .\verify_c_api.c "-I$prefix\include" "$prefix\lib\libyunsdr_ss.dll.a" -o "$p
 & "$prefix\tests\yunsdr_ss\verify_c_api.exe"
 ```
 
-**PCIES 和固件更新。** 本交付包在 MinGW 下会自动选中 Linux 的 `libpcies.a` 和 `libfirmware.a`。显式指定随包的 Windows `.lib` 后，链接仍缺少 `__security_check_cookie` 等 MSVC 运行库符号。需要这些功能时使用 [MSVC 默认构建](#232-配置编译和安装)。板卡联机收发尚待验证。[MinGW-w64 的 Python 绑定构建](#253-windows-x64-mingw-w64)
+**PCIES 和 RFIC 配置库。** 本交付包在 MinGW 下会自动选中 Linux 的 `libpcies.a` 和 `libfirmware.a`。显式指定随包的 Windows `.lib` 后，链接仍缺少 `__security_check_cookie` 等 MSVC 运行库符号。需要这些功能时使用 [MSVC 默认构建](#232-配置编译和安装)。板卡联机收发尚待验证。[MinGW-w64 的 Python 绑定构建](#253-windows-x64-mingw-w64)
 
 ### 2.4 Linux x86-64 与 AArch64
 
@@ -267,7 +267,7 @@ test -f CMakeLists.txt
 
 #### 2.4.2 配置、编译和安装
 
-Linux x86-64 和 AArch64 的默认配置均开启 PCIEX、PCIES、USB3 和固件更新。先按第 2.4.1 节安装 `libusb-1.0-0-dev`，再把第一行的 `cd` 路径改成实际的源码根目录。Linux 步骤按交付包 CMake 核对，原生构建与设备联机的验证状态见 [兼容矩阵](compatibility.md)。
+Linux x86-64 和 AArch64 的默认配置均开启 PCIEX、PCIES、USB3 和 RFIC 配置库。先按第 2.4.1 节安装 `libusb-1.0-0-dev`，再把第一行的 `cd` 路径改成实际的源码根目录。Linux 步骤按交付包 CMake 核对，原生构建与设备联机的验证状态见 [兼容矩阵](compatibility.md)。
 
 ```bash
 cd "$HOME/libyunsdr-26-01-00.1"
@@ -293,7 +293,7 @@ grep YUNSDR_VERSION_STRING /usr/local/include/version.h
 
 排查加载问题时，用 `file build-linux/lib/libyunsdr_ss.so` 核对架构，再在测试目录用 `ldd ./yunsdr_ss_txrx_multiport` 检查依赖。
 
-可选精简构建使用新的构建目录。只需 PCIEX、PCIES 和固件更新时，将 `ENABLE_USB3` 设为 `OFF`。只需 USB3 时，保留 `ENABLE_USB3=ON`，将 `ENABLE_PCIEX`、`ENABLE_PCIES` 和 `ENABLE_FIRMWARE` 设为 `OFF`。相应的测试目录位于该构建目录的 `tests/`。
+可选精简构建使用新的构建目录。只需 PCIEX、PCIES 和 RFIC 配置库时，将 `ENABLE_USB3` 设为 `OFF`。只需 USB3 时，保留 `ENABLE_USB3=ON`，将 `ENABLE_PCIEX`、`ENABLE_PCIES` 和 `ENABLE_FIRMWARE` 设为 `OFF`。相应的测试目录位于该构建目录的 `tests/`。
 
 本包在 Linux 将核心库和头文件分别安装到固定的 `/usr/local/lib` 和 `/usr/local/include`，上例也将 pkg-config 文件放到 `/usr/local/lib/pkgconfig`。测试和示例可执行文件留在 `build-linux/tests/` 和 `build-linux/example/`。若需保留多个版本，可在构建目录分别链接，并使用 `LD_LIBRARY_PATH` 指定对应构建的 `lib/`。系统安装会写入相同的核心库路径。[CMake 3.16 命令参考](https://cmake.org/cmake/help/v3.16/manual/cmake.1.html#install-a-project)
 
@@ -321,7 +321,7 @@ $swig = (Get-Command swig.exe).Source
 
 #### 2.5.2 Windows x64 MSVC
 
-按 [MSVC 默认构建](#232-配置编译和安装) 执行第一个代码块，进入源码目录并设置 `$generator`、`$toolset` 和 `$usbArgs`。执行第 2.5.1 节准备 Python 和 SWIG，再运行以下命令。默认开启 PCIEX、PCIES、USB3 和固件更新。需要关闭 USB3 时，将 `$usbArgs` 设为 `@('-DENABLE_USB3=OFF')`，并将 `$profile` 改为 `'pciex-pcies'`。
+按 [MSVC 默认构建](#232-配置编译和安装) 执行第一个代码块，进入源码目录并设置 `$generator`、`$toolset` 和 `$usbArgs`。执行第 2.5.1 节准备 Python 和 SWIG，再运行以下命令。默认开启 PCIEX、PCIES、USB3 和 RFIC 配置库。需要关闭 USB3 时，将 `$usbArgs` 设为 `@('-DENABLE_USB3=OFF')`，并将 `$profile` 改为 `'pciex-pcies'`。
 
 ```powershell
 $profile = 'pciex-pcies-usb3'
@@ -926,7 +926,8 @@ export LD_LIBRARY_PATH="$PWD/../lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 | 设备模式与缓存 | `set_duplex_select`、`set_rx_ant_enable`、`set_trxsw_fpga_enable`、`tx_cyclic_enable`、`set_tx_cyclic_size`、`set/get_hwbuf_depth` | 由当前产品固件定义行为、单位及合法值。循环发送后按该机型流程停止 |
 | 其他设备控制 | `set_tx_lo_int_ext`、`set_rx_lo_int_ext`、`set_ext_lo_freq`、`set_vco_select`、`set_auxdac1`、`set_rx_fir_en_dis`、`set_tx_fir_en_dis` | 外部 LO、校准、辅助 DAC 和滤波器为机型相关，`set_auxdac1` 的参数单位为 mV |
 | 校正 | `set_rxchannel_coef`、`set_txchannel_coef`、`set_rxchannel_ampcoef`、`set_txchannel_ampcoef`、`enable_rxchannel_corr`、`enable_txchannel_corr` | 使用已确认的系数格式与通道映射，幅度校正只使用固件和实现支持的通道 |
-| GPIO 与扩展 | `gpio_set_direction`、`gpio_write`、`gpio_read`、`get/set_rfchip_reg`、`get/set_extend_cmd`、`firmware_update` | 只在产品文档明确规定通道、地址、命令或镜像时使用。GPIO 方向和值、更新模式以配套说明为准 |
+| GPIO 与扩展 | `gpio_set_direction`、`gpio_write`、`gpio_read`、`get/set_rfchip_reg`、`get/set_extend_cmd` | GPIO 方向和值、RFIC 寄存器地址和扩展命令以机型说明为准 |
+| 设备 Flash 镜像维护 | `firmware_update` | 使用机型指定的镜像和更新模式。示例见 [扩展示例和设备诊断](#45-扩展示例和设备诊断) |
 
 表中的 `set/get_` 表示分别以 `set_` 和 `get_` 开头的两个函数。
 
